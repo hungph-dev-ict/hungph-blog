@@ -19,20 +19,18 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
   return (
     <article className="group relative flex flex-col sm:flex-row gap-6 p-5 rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900/60 hover:border-blue-500/40 dark:hover:border-blue-500/40 hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300">
-      {/* Cover Image */}
-      {post.cover_image && (
-        <Link
-          href={`/posts/${post.slug}`}
-          className="sm:w-64 md:w-72 lg:w-80 h-48 sm:h-auto min-h-[190px] shrink-0 overflow-hidden rounded-xl relative block bg-stone-100 dark:bg-stone-800"
-        >
-          <img
-            src={getFullImageUrl(post.cover_image)}
-            alt={post.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            loading="lazy"
-          />
-        </Link>
-      )}
+      {/* Cover Image - Always shown, uses branded default if no cover_image */}
+      <Link
+        href={`/posts/${post.slug}`}
+        className="sm:w-64 md:w-72 lg:w-80 h-48 sm:h-auto min-h-[190px] shrink-0 overflow-hidden rounded-xl relative block bg-stone-100 dark:bg-stone-800"
+      >
+        <img
+          src={getFullImageUrl(post.cover_image)}
+          alt={post.title}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          loading="lazy"
+        />
+      </Link>
 
       {/* Content */}
       <div className="flex flex-col justify-between flex-1 min-w-0">

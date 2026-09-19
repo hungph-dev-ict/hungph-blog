@@ -1,19 +1,21 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Search, Sparkles, Tag as TagIcon, Layers, PenLine, GraduationCap, ArrowRight } from "lucide-react";
+import { Search, Sparkles, Tag as TagIcon, Layers, PenLine, GraduationCap, ArrowRight, BookOpen } from "lucide-react";
 import Link from "next/link";
-import { fetchCategories, fetchPosts } from "@/lib/api";
-import { Category, PaginatedPosts, PostListItem } from "@/lib/types";
+import { fetchCategories, fetchPosts, fetchLatestSeries, getFullCourseImageUrl } from "@/lib/api";
+import { Category, PaginatedPosts, Series } from "@/lib/types";
 import { PostCard } from "@/components/blog/PostCard";
 
 export default function HomePage() {
   const [postsData, setPostsData] = useState<PaginatedPosts | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [latestSeries, setLatestSeries] = useState<Series | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
+  const [seriesLoading, setSeriesLoading] = useState<boolean>(true);
 
   const loadPosts = async () => {
     setLoading(true);
@@ -23,6 +25,12 @@ export default function HomePage() {
         limit: 8,
         category: selectedCategory || undefined,
         search: searchQuery || undefined,
+      });
+      // Sort by published_at or created_at descending (newest first)
+      data.items = data.items.sort((a, b) => {
+        const dateA = new Date(a.published_at || a.created_at).getTime();
+        const dateB = new Date(b.published_at || b.created_at).getTime();
+        return dateB - dateA;
       });
       setPostsData(data);
     } catch (err) {
@@ -34,6 +42,11 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(console.error);
+    // Fetch the latest series dynamically
+    fetchLatestSeries()
+      .then(setLatestSeries)
+      .catch(console.error)
+      .finally(() => setSeriesLoading(false));
   }, []);
 
   useEffect(() => {
@@ -89,33 +102,55 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Featured Series Banner */}
-      <section className="p-6 rounded-3xl border border-blue-200/80 dark:border-blue-900/60 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-transparent dark:from-blue-950/40 dark:via-stone-900/40 dark:to-transparent flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
-            <GraduationCap className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-              Khóa Học & Tuyển Tập Bài Bản
+      {/* Latest Series / Course Banner — Dynamic */}
+      {seriesLoading ? (
+        <section className="h-28 rounded-3xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900/50 animate-pulse" />
+      ) : latestSeries ? (
+        <section className="p-6 rounded-3xl border border-blue-200/80 dark:border-blue-900/60 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-transparent dark:from-blue-950/40 dark:via-stone-900/40 dark:to-transparent flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 overflow-hidden relative">
+          {/* Subtle background image */}
+          <div
+            className="absolute inset-0 opacity-5 bg-cover bg-center pointer-events-none"
+            style={{ backgroundImage: `url(${getFullCourseImageUrl(latestSeries.cover_image)})` }}
+          />
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-md shadow-blue-500/20 shrink-0 border border-blue-200/50 dark:border-blue-800/50">
+              <img
+                src={getFullCourseImageUrl(latestSeries.cover_image)}
+                alt={latestSeries.title}
+                className="w-full h-full object-cover"
+              />
             </div>
-            <h3 className="font-bold text-base text-stone-900 dark:text-white">
-              Prep Course: Chinh Phục AI, RAG & Kiến Trúc Hệ Thống
-            </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Học theo dàn outline từng chương, từng bài như đọc một cuốn sách hoặc khóa học hoàn chỉnh.
-            </p>
+            <div>
+              <div className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                <GraduationCap className="w-3.5 h-3.5" />
+                Khóa Học & Tuyển Tập Bài Bản • Mới nhất
+              </div>
+              <h3 className="font-bold text-base text-stone-900 dark:text-white mt-0.5 line-clamp-1">
+                {latestSeries.title}
+              </h3>
+              {latestSeries.summary && (
+                <p className="text-xs text-stone-500 mt-0.5 line-clamp-1">
+                  {latestSeries.summary}
+                </p>
+              )}
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-[11px] text-stone-400 flex items-center gap-1">
+                  <BookOpen className="w-3 h-3" />
+                  {latestSeries.total_chapters} chương • {latestSeries.total_lessons} bài
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <Link
-          href="/series/prep-course-chinh-phuc-ai-va-rag"
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shrink-0 shadow-sm shadow-blue-500/20 transition-all"
-        >
-          <span>Khám phá Outline</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
-      </section>
+          <Link
+            href={`/series/${latestSeries.slug}`}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shrink-0 shadow-sm shadow-blue-500/20 transition-all relative z-10"
+          >
+            <span>Khám phá Outline</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </section>
+      ) : null}
 
       {/* Category Filter Pills */}
       <section className="space-y-4">

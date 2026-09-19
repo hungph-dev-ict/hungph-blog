@@ -20,7 +20,15 @@ export const SERVER_HOST =
   process.env.NEXT_PUBLIC_SERVER_HOST || "http://localhost:8000";
 
 export function getFullImageUrl(url?: string | null): string {
-  if (!url) return "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80";
+  if (!url) return "/default-post.jpg";
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  return `${SERVER_HOST}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
+export function getFullCourseImageUrl(url?: string | null): string {
+  if (!url) return "/default-course.jpg";
   if (url.startsWith("http://") || url.startsWith("https://")) {
     return url;
   }
@@ -216,6 +224,15 @@ export async function fetchSeries(): Promise<Series[]> {
   const res = await fetch(`${API_BASE_URL}/blog/series`, { cache: "no-store" });
   if (!res.ok) return [];
   return res.json();
+}
+
+export async function fetchLatestSeries(): Promise<Series | null> {
+  const series = await fetchSeries();
+  if (!series || series.length === 0) return null;
+  // Sort by created_at descending and return the first one
+  return series.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )[0];
 }
 
 export async function fetchSeriesBySlug(slug: string): Promise<SeriesDetail> {
