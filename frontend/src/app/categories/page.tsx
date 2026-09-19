@@ -21,7 +21,7 @@ export default function CategoriesPage() {
   }, []);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-12 pb-16">
+    <div className="w-full space-y-12 pb-16">
       <div className="space-y-3">
         <h1 className="text-3xl sm:text-4xl font-extrabold text-stone-900 dark:text-white">
           Chủ Đề & Thẻ Bài Viết
@@ -39,13 +39,13 @@ export default function CategoriesPage() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-pulse">
-            {[1, 2].map((i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
+            {[1, 2, 3].map((i) => (
               <div key={i} className="h-28 rounded-2xl bg-stone-200 dark:bg-stone-800" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {categories.map((cat) => (
               <Link
                 key={cat.id}

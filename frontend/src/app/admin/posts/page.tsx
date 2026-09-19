@@ -77,7 +77,7 @@ export default function AdminPostsPage() {
   const displayedPosts = isAdmin ? posts : posts.filter((p) => p.author?.id === user.id);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-16">
+    <div className="w-full space-y-8 pb-16">
       {/* Top Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-6">
         <div>

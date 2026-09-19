@@ -34,7 +34,7 @@ export default function SeriesDetailPage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto py-16 space-y-6 animate-pulse">
+      <div className="w-full py-16 space-y-6 animate-pulse">
         <div className="h-6 w-32 bg-stone-200 dark:bg-stone-800 rounded-lg" />
         <div className="h-12 w-3/4 bg-stone-200 dark:bg-stone-800 rounded-xl" />
         <div className="h-48 w-full bg-stone-200 dark:bg-stone-800 rounded-3xl" />
@@ -65,7 +65,7 @@ export default function SeriesDetailPage() {
       : null;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-12 pb-20">
+    <div className="w-full space-y-12 pb-20">
       {/* Back button */}
       <div>
         <button

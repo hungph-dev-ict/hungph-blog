@@ -117,7 +117,7 @@ export default function AdminCategoriesPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-16">
+    <div className="w-full space-y-8 pb-16">
       {/* Top Bar */}
       <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-4">
         <div className="flex items-center gap-3">

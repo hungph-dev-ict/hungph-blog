@@ -56,7 +56,7 @@ export default function UtilitiesPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-10 pb-16">
+    <div className="w-full max-w-5xl mx-auto space-y-10 pb-16">
       <div className="space-y-3">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
           <Wrench className="w-3.5 h-3.5" />

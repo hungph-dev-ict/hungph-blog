@@ -18,9 +18,9 @@ export default function SeriesListPage() {
   }, []);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-12 pb-16">
+    <div className="w-full space-y-12 pb-16">
       {/* Header */}
-      <div className="space-y-4 max-w-2xl">
+      <div className="space-y-4 max-w-3xl">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
           <GraduationCap className="w-4 h-4" />
           <span>Lộ Trình Học & Tuyển Tập</span>
@@ -35,8 +35,8 @@ export default function SeriesListPage() {
 
       {/* Series Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-pulse">
-          {[1, 2].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+          {[1, 2, 3].map((i) => (
             <div key={i} className="h-64 rounded-3xl bg-stone-100 dark:bg-stone-800" />
           ))}
         </div>
@@ -47,7 +47,7 @@ export default function SeriesListPage() {
           <p className="text-xs text-stone-500">Hãy đón chờ những series tiếp theo nhé!</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {seriesList.map((series) => (
             <div
               key={series.id}

@@ -23,7 +23,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
       {post.cover_image && (
         <Link
           href={`/posts/${post.slug}`}
-          className="sm:w-56 h-48 sm:h-auto shrink-0 overflow-hidden rounded-xl relative block bg-stone-100 dark:bg-stone-800"
+          className="sm:w-64 md:w-72 lg:w-80 h-48 sm:h-auto min-h-[190px] shrink-0 overflow-hidden rounded-xl relative block bg-stone-100 dark:bg-stone-800"
         >
           <img
             src={getFullImageUrl(post.cover_image)}

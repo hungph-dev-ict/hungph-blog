@@ -50,7 +50,7 @@ export default function HomePage() {
     <div className="space-y-12 pb-12">
       {/* Hero Section */}
       <section className="relative overflow-hidden rounded-3xl p-8 sm:p-12 border border-stone-200/80 dark:border-stone-800 bg-gradient-to-b from-blue-50/50 via-white to-transparent dark:from-blue-950/20 dark:via-stone-900/40 dark:to-transparent">
-        <div className="max-w-2xl space-y-4">
+        <div className="max-w-3xl space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100/80 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
             <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
             <span>Kỹ Thuật • Kiến Trúc • Trí Tuệ Nhân Tạo</span>
@@ -68,7 +68,7 @@ export default function HomePage() {
           </p>
 
           {/* Search Bar */}
-          <form onSubmit={handleSearchSubmit} className="pt-2 flex items-center gap-2 max-w-md">
+          <form onSubmit={handleSearchSubmit} className="pt-2 flex items-center gap-2 max-w-lg">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
               <input

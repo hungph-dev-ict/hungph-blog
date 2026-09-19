@@ -25,7 +25,7 @@ export default function RAGAssistantPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-10 pb-16">
+    <div className="w-full max-w-5xl mx-auto space-y-10 pb-16">
       {/* Header */}
       <div className="space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">

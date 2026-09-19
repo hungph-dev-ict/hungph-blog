@@ -27,7 +27,7 @@ export default function RootLayout({
       <body className="flex flex-col min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 selection:bg-blue-500 selection:text-white transition-colors duration-200">
         <AuthProvider>
           <Header />
-          <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-8">
+          <main className="flex-1 max-w-7xl 2xl:max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {children}
           </main>
           <Footer />

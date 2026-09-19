@@ -97,7 +97,7 @@ export default function PostDetailPage() {
     <>
       <ReadingProgressBar />
 
-      <div className="max-w-5xl mx-auto pb-16">
+      <div className="w-full pb-16">
         {/* Navigation / Course Breadcrumb */}
         <div className="mb-6 flex items-center justify-between">
           <button
