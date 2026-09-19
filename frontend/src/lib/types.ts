@@ -13,6 +13,7 @@ export interface User {
 export interface Comment {
   id: string;
   post_id: string;
+  user_id?: string;
   author_name: string;
   author_avatar?: string;
   content: string;
@@ -55,11 +56,14 @@ export interface LessonBrief {
 export interface Chapter {
   id: string;
   series_id: string;
+  parent_id?: string;
+  level?: number;
   title: string;
   order: number;
   description?: string;
   created_at: string;
   lessons?: LessonBrief[];
+  sub_chapters?: Chapter[];
 }
 
 export interface Series {
@@ -70,6 +74,8 @@ export interface Series {
   cover_image?: string;
   is_published: boolean;
   category_id?: string;
+  hierarchy_config?: string;
+  attribution_text?: string;
   created_at: string;
   category?: Category;
   total_chapters: number;

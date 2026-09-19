@@ -13,10 +13,12 @@ import {
   Users,
   Send,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { getFullImageUrl, requestCollaboration } from "@/lib/api";
 import { SeriesDetail } from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
+import { buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
 
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 
@@ -157,80 +159,154 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
         </div>
       </section>
 
-      {/* Chapters & Lessons Syllabus */}
-      <section className="space-y-6">
-        <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-3">
-          <div className="flex items-center gap-2 font-bold text-lg text-stone-900 dark:text-white">
-            <BookOpen className="w-5 h-5 text-blue-600" />
-            <span>Đề Cương Chi Tiết ({series.chapters.length} Chương)</span>
-          </div>
-        </div>
+      {/* Attribution & Copyright Banner */}
+      {(() => {
+        const attribution =
+          series.attribution_text ||
+          (series.title.toLowerCase().includes("claude") || series.title.toLowerCase().includes("anthropic")
+            ? "Khóa học được biên dịch và tổng hợp từ tài liệu đào tạo chính thức của Anthropic PBC (Claude Certified Architect). Bản quyền nội dung gốc thuộc về Anthropic PBC. Bản dịch tiếng Việt, hệ thống hóa và ghi chú thực hành bởi HungPH Blog."
+            : null);
 
-        <div className="space-y-4">
-          {series.chapters.map((chapter, index) => (
-            <div
-              key={chapter.id}
-              className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900/40 p-6 space-y-4"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                    Chương {index + 1}
-                  </div>
-                  <h2 className="text-lg font-bold text-stone-900 dark:text-white">
-                    {chapter.title}
-                  </h2>
-                  {chapter.description && (
-                    <p className="text-xs text-stone-500 dark:text-stone-400">
-                      {chapter.description}
-                    </p>
-                  )}
-                </div>
-                <span className="text-xs font-medium text-stone-400 shrink-0">
-                  {chapter.lessons?.length || 0} bài học
+        if (!attribution) return null;
+
+        return (
+          <div className="rounded-3xl p-6 border border-amber-200/90 dark:border-amber-900/50 bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-yellow-50/60 dark:from-amber-950/25 dark:via-orange-950/15 dark:to-yellow-950/20 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-4 text-xs">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-200/80 dark:border-amber-800">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div className="space-y-1 flex-1">
+              <div className="font-bold text-amber-950 dark:text-amber-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <span>Bản quyền &amp; Nguồn gốc tài liệu tham khảo</span>
+              </div>
+              <p className="text-amber-900/85 dark:text-amber-300/85 leading-relaxed text-xs">
+                {attribution}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Chapters & Lessons Syllabus */}
+      {(() => {
+        let levels = ["Chương"];
+        try {
+          if (series.hierarchy_config) {
+            const parsed = JSON.parse(series.hierarchy_config);
+            if (Array.isArray(parsed) && parsed.length > 0) levels = parsed;
+          }
+        } catch (e) {}
+
+        const tree = buildChapterTree(series.chapters || [], levels);
+        const flatList = flattenChapterTree(tree);
+
+        return (
+          <section className="space-y-6">
+            <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-3">
+              <div className="flex items-center gap-2 font-bold text-lg text-stone-900 dark:text-white">
+                <BookOpen className="w-5 h-5 text-blue-600" />
+                <span>
+                  Đề Cương Chi Tiết ({tree.length} {levels[0]})
                 </span>
               </div>
-
-              {/* Lessons in this chapter */}
-              {chapter.lessons && chapter.lessons.length > 0 ? (
-                <div className="grid grid-cols-1 gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-                  {chapter.lessons.map((lesson, lIdx) => (
-                    <Link
-                      key={lesson.id}
-                      href={`/posts/${lesson.slug}`}
-                      className="group flex items-center justify-between p-3 rounded-xl hover:bg-stone-50 dark:hover:bg-stone-800/60 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <CheckCircle2 className="w-4 h-4 text-stone-300 dark:text-stone-600 group-hover:text-blue-500 transition-colors" />
-                        <div>
-                          <span className="text-xs text-stone-400 mr-2 font-medium">
-                            {index + 1}.{lIdx + 1}
-                          </span>
-                          <span className="text-sm font-medium text-stone-800 dark:text-stone-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                            {lesson.title}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {lesson.reading_time_minutes > 0 && (
-                          <span className="text-[11px] text-stone-400 hidden sm:inline">
-                            {lesson.reading_time_minutes} phút
-                          </span>
-                        )}
-                        <ChevronRight className="w-4 h-4 text-stone-400 group-hover:translate-x-0.5 transition-transform" />
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs italic text-stone-400 pt-2">
-                  Chưa có bài học nào được thêm vào chương này.
-                </p>
-              )}
             </div>
-          ))}
-        </div>
-      </section>
+
+            <div className="space-y-4">
+              {flatList.map((chapter) => {
+                const lvl = chapter.level || 1;
+                const lvlName = levels[lvl - 1] || `Cấp ${lvl}`;
+                const indentPx = Math.min((lvl - 1) * 20, 100);
+
+                const borderColors = [
+                  "border-blue-400 dark:border-blue-600",
+                  "border-indigo-400 dark:border-indigo-600",
+                  "border-purple-400 dark:border-purple-600",
+                  "border-amber-400 dark:border-amber-600",
+                  "border-emerald-400 dark:border-emerald-600",
+                ];
+                const bgColors = [
+                  "bg-white dark:bg-stone-900/40",
+                  "bg-blue-50/20 dark:bg-blue-950/10",
+                  "bg-indigo-50/20 dark:bg-indigo-950/10",
+                  "bg-purple-50/20 dark:bg-purple-950/10",
+                  "bg-emerald-50/20 dark:bg-emerald-950/10",
+                ];
+                const colorIdx = Math.min(lvl - 1, borderColors.length - 1);
+
+                return (
+                  <div
+                    key={chapter.id}
+                    style={{ marginLeft: `${indentPx}px` }}
+                    className={`rounded-2xl border ${
+                      lvl > 1
+                        ? `border-l-4 ${borderColors[colorIdx]} ${bgColors[colorIdx]} border-stone-200 dark:border-stone-800`
+                        : "border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900/40"
+                    } p-5 space-y-3 transition-all`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                          <span>
+                            {lvlName} {chapter.displayNumber}
+                          </span>
+                          {lvl > 1 && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-semibold lowercase">
+                              thuộc cấp trên
+                            </span>
+                          )}
+                        </div>
+                        <h2 className="text-base font-bold text-stone-900 dark:text-white">
+                          {chapter.title}
+                        </h2>
+                        {chapter.description && (
+                          <p className="text-xs text-stone-500 dark:text-stone-400">
+                            {chapter.description}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs font-medium text-stone-400 shrink-0">
+                        {chapter.lessons?.length || 0} bài học
+                      </span>
+                    </div>
+
+                    {/* Lessons in this chapter */}
+                    {chapter.lessons && chapter.lessons.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-1.5 pt-2 border-t border-stone-100 dark:border-stone-800">
+                        {chapter.lessons.map((lesson, lIdx) => (
+                          <Link
+                            key={lesson.id}
+                            href={`/posts/${lesson.slug}`}
+                            className="group flex items-center justify-between p-2.5 rounded-xl hover:bg-stone-50 dark:hover:bg-stone-800/60 transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <CheckCircle2 className="w-4 h-4 text-stone-300 dark:text-stone-600 group-hover:text-blue-500 transition-colors shrink-0" />
+                              <div>
+                                <span className="text-xs text-stone-400 mr-2 font-medium">
+                                  {chapter.displayNumber}.{lIdx + 1}
+                                </span>
+                                <span className="text-xs font-medium text-stone-800 dark:text-stone-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                  {lesson.title}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {lesson.reading_time_minutes > 0 && (
+                                <span className="text-[11px] text-stone-400 hidden sm:inline">
+                                  {lesson.reading_time_minutes} phút
+                                </span>
+                              )}
+                              <ChevronRight className="w-4 h-4 text-stone-400 group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Collaboration Request Modal */}
       {showCollabModal && (

@@ -259,6 +259,8 @@ export async function createSeries(
     cover_image?: string;
     is_published?: boolean;
     category_id?: string;
+    hierarchy_config?: string;
+    attribution_text?: string;
   },
   token: string
 ): Promise<Series> {
@@ -283,6 +285,8 @@ export async function updateSeries(
     cover_image?: string;
     is_published?: boolean;
     category_id?: string;
+    hierarchy_config?: string;
+    attribution_text?: string;
   },
   token: string
 ): Promise<Series> {
@@ -310,7 +314,13 @@ export async function deleteSeries(id: string, token: string): Promise<void> {
 
 export async function addChapter(
   seriesId: string,
-  data: { title: string; order?: number; description?: string },
+  data: {
+    title: string;
+    order?: number;
+    description?: string;
+    parent_id?: string;
+    level?: number;
+  },
   token: string
 ): Promise<Chapter> {
   const res = await fetch(`${API_BASE_URL}/blog/series/${seriesId}/chapters`, {
@@ -327,7 +337,13 @@ export async function addChapter(
 
 export async function updateChapter(
   chapterId: string,
-  data: { title?: string; order?: number; description?: string },
+  data: {
+    title?: string;
+    order?: number;
+    description?: string;
+    parent_id?: string;
+    level?: number;
+  },
   token: string
 ): Promise<Chapter> {
   const res = await fetch(`${API_BASE_URL}/blog/chapters/${chapterId}`, {
@@ -458,6 +474,19 @@ export async function deleteComment(commentId: string, token: string): Promise<v
   if (!res.ok) {
     throw new Error("Không thể xóa bình luận");
   }
+}
+
+export async function updateComment(commentId: string, content: string, token: string): Promise<Comment> {
+  const res = await fetch(`${API_BASE_URL}/blog/comments/${commentId}`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Không thể cập nhật bình luận");
+  }
+  return res.json();
 }
 
 export async function loginWithGoogle(payload: {

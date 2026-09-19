@@ -30,6 +30,11 @@ async def init_default_data():
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'member';"))
             # Social features
             await conn.execute(text("ALTER TABLE series ADD COLUMN IF NOT EXISTS owner_id VARCHAR(36);"))
+            # Course hierarchy & attribution
+            await conn.execute(text("ALTER TABLE series ADD COLUMN IF NOT EXISTS hierarchy_config TEXT DEFAULT '[\"Chương\"]';"))
+            await conn.execute(text("ALTER TABLE series ADD COLUMN IF NOT EXISTS attribution_text TEXT;"))
+            await conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS parent_id VARCHAR(36);"))
+            await conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS level INT DEFAULT 1;"))
         except Exception as mig_err:
             print(f"Migration note (pre-create): {mig_err}")
         # Tạo tất cả bảng mới (new tables from social module)
@@ -82,7 +87,7 @@ async def init_default_data():
                 title="Chào Mừng Bạn Đến Với Blog Cá Nhân Mới Của Tôi!",
                 slug="chao-mung-ban-den-voi-blog-ca-nhan-moi",
                 summary="Giới thiệu về kiến trúc blog hiện đại: Next.js trên Vercel kết hợp FastAPI trên Render, hỗ trợ viết lách chuẩn Notion/WordPress và sẵn sàng cho AI RAG.",
-                content_html="""<h2>Xin chào, tôi là Hùng!</h2>
+                content_html="""<h2>Xin chào, tôi là Hưng!</h2>
 <p>Chào mừng bạn ghé thăm không gian viết lách và chia sẻ kiến thức của tôi. Đây là phiên bản blog được xây dựng với mục tiêu:</p>
 <ul>
     <li><strong>Trải nghiệm đọc tinh gọn:</strong> Giao diện tối giản, chuẩn typography hiện đại, hỗ trợ Dark Mode và thời lượng đọc.</li>

@@ -52,6 +52,10 @@ class Series(Base):
     owner_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     owner = relationship("User", foreign_keys=[owner_id], lazy="selectin")
 
+    # Hierarchy & Attribution
+    hierarchy_config = Column(Text, default='["Chương"]')
+    attribution_text = Column(Text, nullable=True)
+
     category_id = Column(String(36), ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
     category = relationship("Category", back_populates="series", lazy="selectin")
 
@@ -64,16 +68,20 @@ class Series(Base):
 
 
 class Chapter(Base):
-    """Mô hình Chương trong Khóa học / Bộ truyện."""
+    """Mô hình Chương / Module / Section trong Khóa học."""
     __tablename__ = "chapters"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     series_id = Column(String(36), ForeignKey("series.id", ondelete="CASCADE"), nullable=False)
+    parent_id = Column(String(36), ForeignKey("chapters.id", ondelete="CASCADE"), nullable=True)
+    level = Column(Integer, default=1)
     title = Column(String(255), nullable=False)
     order = Column(Integer, default=1)
     description = Column(Text, nullable=True)
 
     series = relationship("Series", back_populates="chapters")
+    parent = relationship("Chapter", remote_side=[id], back_populates="sub_chapters")
+    sub_chapters = relationship("Chapter", back_populates="parent", cascade="all, delete-orphan", order_by="Chapter.order", lazy="selectin")
     posts = relationship("Post", back_populates="chapter", order_by="Post.order_in_chapter", lazy="selectin")
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

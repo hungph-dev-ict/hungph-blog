@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   GraduationCap,
@@ -31,11 +31,16 @@ import {
   getFullImageUrl,
   uploadMedia,
 } from "@/lib/api";
-import { Category, Series, SeriesDetail } from "@/lib/types";
+import { Category, Chapter, Series, SeriesDetail } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { HierarchyConfigEditor } from "@/components/series/HierarchyConfigEditor";
+import { ChapterNode, buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
 
-export default function AdminSeriesPage() {
+function AdminSeriesContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const slugParam = searchParams.get("slug");
+  const idParam = searchParams.get("id");
   const { user, token, isLoading } = useAuth();
 
   const [seriesList, setSeriesList] = useState<Series[]>([]);
@@ -48,6 +53,8 @@ export default function AdminSeriesPage() {
   const [summary, setSummary] = useState("");
   const [coverImage, setCoverImage] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [hierarchyConfig, setHierarchyConfig] = useState('["Chương"]');
+  const [attributionText, setAttributionText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // Edit Series form
@@ -56,12 +63,39 @@ export default function AdminSeriesPage() {
   const [editSummary, setEditSummary] = useState("");
   const [editCoverImage, setEditCoverImage] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
+  const [editHierarchyConfig, setEditHierarchyConfig] = useState('["Chương"]');
+  const [editAttributionText, setEditAttributionText] = useState("");
   const [editIsPublished, setEditIsPublished] = useState(true);
 
   // Selected Series for Chapter inspection
   const [selectedSeriesSlug, setSelectedSeriesSlug] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<SeriesDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [newChapterTitle, setNewChapterTitle] = useState("");
+  const [newChapterParentId, setNewChapterParentId] = useState("");
+
+  const inspectSeries = React.useCallback(async (slug: string) => {
+    if (!slug) return;
+    const cleanSlug = decodeURIComponent(slug.trim());
+    setSelectedSeriesSlug(cleanSlug);
+    setDetailLoading(true);
+    try {
+      const detail = await fetchSeriesBySlug(cleanSlug);
+      setSelectedDetail(detail);
+      if (typeof window !== "undefined") {
+        const currentUrl = new URL(window.location.href);
+        if (currentUrl.searchParams.get("slug") !== cleanSlug) {
+          currentUrl.searchParams.set("slug", cleanSlug);
+          currentUrl.searchParams.delete("id");
+          window.history.replaceState(null, "", currentUrl.toString());
+        }
+      }
+    } catch (e) {
+      console.error("Lỗi tải chi tiết khóa học:", e);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
 
   // Edit Chapter state
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
@@ -97,12 +131,37 @@ export default function AdminSeriesPage() {
     }
   }, [user, isLoading, router]);
 
-  const loadData = async () => {
+  const loadData = async (targetSlug?: string | null) => {
     setLoading(true);
     try {
       const [sData, cData] = await Promise.all([fetchSeries(), fetchCategories()]);
       setSeriesList(sData);
       setCategories(cData);
+
+      // Xác định khóa học cần chọn từ query parameters ngay khi load xong dữ liệu
+      let slugToSelect = targetSlug;
+      if (!slugToSelect && typeof window !== "undefined") {
+        const currentParams = new URLSearchParams(window.location.search);
+        slugToSelect = currentParams.get("slug");
+        if (!slugToSelect) {
+          const id = currentParams.get("id");
+          if (id) {
+            const match = sData.find((s: Series) => s.id === id);
+            if (match) slugToSelect = match.slug;
+          }
+        }
+      }
+      if (!slugToSelect && slugParam) {
+        slugToSelect = slugParam;
+      }
+      if (!slugToSelect && idParam) {
+        const match = sData.find((s: Series) => s.id === idParam);
+        if (match) slugToSelect = match.slug;
+      }
+
+      if (slugToSelect) {
+        inspectSeries(slugToSelect);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -113,6 +172,21 @@ export default function AdminSeriesPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Lắng nghe thay đổi của searchParams khi điều hướng client-side
+  useEffect(() => {
+    const currentSlug = slugParam || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("slug") : null);
+    const currentId = idParam || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null);
+
+    if (currentSlug && currentSlug !== selectedSeriesSlug) {
+      inspectSeries(currentSlug);
+    } else if (currentId && !currentSlug && seriesList.length > 0) {
+      const match = seriesList.find((s) => s.id === currentId);
+      if (match && match.slug !== selectedSeriesSlug) {
+        inspectSeries(match.slug);
+      }
+    }
+  }, [slugParam, idParam, selectedSeriesSlug, seriesList, inspectSeries]);
 
   const handleCreateSeries = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,6 +200,8 @@ export default function AdminSeriesPage() {
           summary: summary.trim() || undefined,
           cover_image: coverImage.trim() || undefined,
           category_id: categoryId || undefined,
+          hierarchy_config: hierarchyConfig,
+          attribution_text: attributionText.trim() || undefined,
           is_published: true,
         },
         token
@@ -133,6 +209,8 @@ export default function AdminSeriesPage() {
       setTitle("");
       setSummary("");
       setCoverImage("");
+      setAttributionText("");
+      setHierarchyConfig('["Chương"]');
       setShowNewSeriesModal(false);
       loadData();
     } catch (err: any) {
@@ -148,6 +226,8 @@ export default function AdminSeriesPage() {
     setEditSummary(s.summary || "");
     setEditCoverImage(s.cover_image || "");
     setEditCategoryId(s.category_id || "");
+    setEditHierarchyConfig(s.hierarchy_config || '["Chương"]');
+    setEditAttributionText(s.attribution_text || "");
     setEditIsPublished(s.is_published);
   };
 
@@ -164,6 +244,8 @@ export default function AdminSeriesPage() {
           summary: editSummary.trim() || undefined,
           cover_image: editCoverImage.trim() ? editCoverImage.trim() : "",
           category_id: editCategoryId || undefined,
+          hierarchy_config: editHierarchyConfig,
+          attribution_text: editAttributionText.trim() || undefined,
           is_published: editIsPublished,
         },
         token
@@ -190,27 +272,39 @@ export default function AdminSeriesPage() {
       if (selectedDetail?.id === id) {
         setSelectedDetail(null);
         setSelectedSeriesSlug(null);
+        if (typeof window !== "undefined") {
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.delete("slug");
+          currentUrl.searchParams.delete("id");
+          window.history.replaceState(null, "", currentUrl.pathname);
+        }
       }
     } catch (err: any) {
       alert(`Lỗi: ${err.message}`);
     }
   };
 
-  const inspectSeries = async (slug: string) => {
-    setSelectedSeriesSlug(slug);
-    try {
-      const detail = await fetchSeriesBySlug(slug);
-      setSelectedDetail(detail);
-    } catch (e) {
-      console.error(e);
-    }
-  };
+
 
   const handleAddChapter = async (seriesId: string) => {
     if (!newChapterTitle.trim() || !token) return;
     try {
       const order = (selectedDetail?.chapters?.length || 0) + 1;
-      await addChapter(seriesId, { title: newChapterTitle.trim(), order }, token);
+      let level = 1;
+      if (newChapterParentId) {
+        const parentCh = selectedDetail?.chapters?.find((c) => c.id === newChapterParentId);
+        level = parentCh ? (parentCh.level || 1) + 1 : 2;
+      }
+      await addChapter(
+        seriesId,
+        {
+          title: newChapterTitle.trim(),
+          order,
+          parent_id: newChapterParentId || undefined,
+          level,
+        },
+        token
+      );
       setNewChapterTitle("");
       if (selectedSeriesSlug) inspectSeries(selectedSeriesSlug);
       loadData();
@@ -357,6 +451,39 @@ export default function AdminSeriesPage() {
               className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
             />
 
+            {/* Phân cấp nội dung động */}
+            <HierarchyConfigEditor
+              value={hierarchyConfig}
+              onChange={setHierarchyConfig}
+            />
+
+            {/* Bản quyền / Nguồn gốc */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                  Bản quyền &amp; Nguồn gốc (Attribution):
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAttributionText(
+                      "Khóa học được biên dịch và tổng hợp từ tài liệu đào tạo chính thức của Anthropic PBC (Claude Certified Architect). Bản quyền nội dung gốc thuộc về Anthropic PBC. Bản dịch tiếng Việt và ghi chú thực hành bởi HungPH Blog."
+                    )
+                  }
+                  className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                >
+                  + Mẫu bản quyền Anthropic
+                </button>
+              </div>
+              <textarea
+                rows={2}
+                value={attributionText}
+                onChange={(e) => setAttributionText(e.target.value)}
+                placeholder="Nhập ghi chú bản quyền gốc (VD: Anthropic Claude Architect)..."
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
+              />
+            </div>
+
             {/* Cover image input & upload */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -469,6 +596,39 @@ export default function AdminSeriesPage() {
               className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
             />
 
+            {/* Phân cấp nội dung động cho edit */}
+            <HierarchyConfigEditor
+              value={editHierarchyConfig}
+              onChange={setEditHierarchyConfig}
+            />
+
+            {/* Bản quyền / Nguồn gốc cho edit */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                  Bản quyền &amp; Nguồn gốc (Attribution):
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditAttributionText(
+                      "Khóa học được biên dịch và tổng hợp từ tài liệu đào tạo chính thức của Anthropic PBC (Claude Certified Architect). Bản quyền nội dung gốc thuộc về Anthropic PBC. Bản dịch tiếng Việt và ghi chú thực hành bởi HungPH Blog."
+                    )
+                  }
+                  className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-semibold"
+                >
+                  + Mẫu bản quyền Anthropic
+                </button>
+              </div>
+              <textarea
+                rows={2}
+                value={editAttributionText}
+                onChange={(e) => setEditAttributionText(e.target.value)}
+                placeholder="Nhập ghi chú bản quyền gốc (VD: Anthropic Claude Architect)..."
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
+              />
+            </div>
+
             {/* Cover image input & upload for edit */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -568,7 +728,7 @@ export default function AdminSeriesPage() {
           ) : (
             <div className="space-y-3">
               {seriesList.map((s) => {
-                const isSelected = selectedSeriesSlug === s.slug;
+                const isSelected = selectedSeriesSlug === s.slug || selectedDetail?.slug === s.slug || selectedDetail?.id === s.id;
                 return (
                   <div
                     key={s.id}
@@ -652,7 +812,12 @@ export default function AdminSeriesPage() {
             Dàn Outline & Các Chương
           </div>
 
-          {selectedDetail ? (
+          {detailLoading ? (
+            <div className="p-12 text-center border border-stone-200 dark:border-stone-800 rounded-3xl text-xs text-stone-500 bg-white dark:bg-stone-900/40 flex flex-col items-center justify-center gap-3 shadow-sm">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+              <span>Đang tải dàn bài học của khóa học...</span>
+            </div>
+          ) : selectedDetail ? (
             <div className="p-6 rounded-3xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 space-y-5 shadow-sm">
               <div className="flex items-start justify-between">
                 <div>
@@ -671,138 +836,252 @@ export default function AdminSeriesPage() {
                 </button>
               </div>
 
-              {/* Add Chapter input */}
-              <div className="flex items-center gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-                <input
-                  type="text"
-                  value={newChapterTitle}
-                  onChange={(e) => setNewChapterTitle(e.target.value)}
-                  placeholder="Tiêu đề chương mới (Ví dụ: Chương 1: Giới thiệu)..."
-                  className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleAddChapter(selectedDetail.id)}
-                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shrink-0"
-                >
-                  Thêm chương
-                </button>
-              </div>
+              {/* Attribution display if present */}
+              {selectedDetail.attribution_text && (
+                <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                    <span>Bản quyền &amp; Nguồn gốc tài liệu</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed opacity-90">{selectedDetail.attribution_text}</p>
+                </div>
+              )}
 
-              {/* Chapters list */}
-              <div className="space-y-3 pt-2">
-                {selectedDetail.chapters && selectedDetail.chapters.length > 0 ? (
-                  selectedDetail.chapters.map((ch, idx) => (
-                    <div
-                      key={ch.id}
-                      className="p-4 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-800/40 space-y-2.5"
-                    >
-                      {editingChapterId === ch.id ? (
-                        /* Inline Edit Chapter Form */
-                        <div className="space-y-2">
-                          <input
-                            type="text"
-                            value={editingChapterTitle}
-                            onChange={(e) => setEditingChapterTitle(e.target.value)}
-                            placeholder="Tiêu đề chương..."
-                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-400 bg-white dark:bg-stone-900"
-                          />
-                          <input
-                            type="text"
-                            value={editingChapterDesc}
-                            onChange={(e) => setEditingChapterDesc(e.target.value)}
-                            placeholder="Mô tả tóm tắt chương (Tùy chọn)..."
-                            className="w-full px-2.5 py-1 text-xs rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
-                          />
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={cancelEditChapter}
-                              className="text-xs px-2.5 py-1 rounded text-stone-500 hover:text-stone-700"
-                            >
-                              Hủy
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleSaveChapter(ch.id)}
-                              className="text-xs font-semibold px-3 py-1 bg-blue-600 text-white rounded-lg flex items-center gap-1"
-                            >
-                              <Check className="w-3 h-3" /> Lưu
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        /* Chapter Display View */
-                        <div className="flex items-center justify-between">
-                          <div className="font-bold text-xs text-stone-900 dark:text-white flex items-center gap-1.5">
-                            <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">
-                              {idx + 1}
-                            </span>
-                            <span>{ch.title}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Link
-                              href={`/admin/editor/new?series_id=${selectedDetail.id}&chapter_id=${ch.id}`}
-                              className="text-[11px] font-semibold text-blue-600 hover:underline flex items-center gap-1"
-                            >
-                              <Plus className="w-3 h-3" /> Viết bài vào chương
-                            </Link>
-                            <button
-                              onClick={() => startEditChapter(ch.id, ch.title, ch.description)}
-                              className="p-1 text-stone-400 hover:text-amber-600 transition-colors"
-                              title="Sửa tên chương"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteChapter(ch.id)}
-                              className="p-1 text-stone-400 hover:text-rose-600 transition-colors"
-                              title="Xóa chương"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
+              {/* Multi-level Chapter / Section Add Section */}
+              {(() => {
+                let levels = ["Chương"];
+                try {
+                  if (selectedDetail.hierarchy_config) {
+                    const parsed = JSON.parse(selectedDetail.hierarchy_config);
+                    if (Array.isArray(parsed) && parsed.length > 0) levels = parsed;
+                  }
+                } catch (e) {}
+
+                const tree = buildChapterTree(selectedDetail.chapters || [], levels);
+                const flatList = flattenChapterTree(tree);
+
+                // Parent node selected (if any)
+                const parentNode = flatList.find((n) => n.id === newChapterParentId);
+                const targetLevelIdx = parentNode ? (parentNode.level || 1) : 0;
+                const targetLevelName = levels[targetLevelIdx] || `Cấp ${targetLevelIdx + 1}`;
+
+                return (
+                  <div className="space-y-4 pt-2 border-t border-stone-100 dark:border-stone-800">
+                    <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700/80">
+                      <div className="flex items-center justify-between text-xs font-semibold text-stone-700 dark:text-stone-300">
+                        <span className="flex items-center gap-1.5">
+                          <Plus className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Thêm mục mới vào dàn bài học:</span>
+                        </span>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold">
+                          Cấp {targetLevelIdx + 1}: {targetLevelName}
+                        </span>
+                      </div>
+
+                      {levels.length > 1 && (
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-medium text-stone-500">
+                            Vị trí phân cấp (Chọn mục cha):
+                          </label>
+                          <select
+                            value={newChapterParentId}
+                            onChange={(e) => setNewChapterParentId(e.target.value)}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-medium"
+                          >
+                            <option value="">+ Tạo {levels[0]} mới (Cấp 1 - Gốc)</option>
+                            {flatList
+                              .filter((ch) => (ch.level || 1) < levels.length)
+                              .map((ch) => {
+                                const nextLvl = (ch.level || 1) + 1;
+                                const nextName = levels[nextLvl - 1] || `Cấp ${nextLvl}`;
+                                const indent = "— ".repeat((ch.level || 1) - 1);
+                                return (
+                                  <option key={ch.id} value={ch.id}>
+                                    {indent}↳ Thêm [{nextName}] vào: {ch.displayNumber} - {ch.title}
+                                  </option>
+                                );
+                              })}
+                          </select>
                         </div>
                       )}
 
-                      {/* Lessons list inside chapter */}
-                      {ch.lessons && ch.lessons.length > 0 ? (
-                        <div className="space-y-1.5 pl-6 border-l-2 border-stone-200 dark:border-stone-700 mt-2">
-                          {ch.lessons.map((lesson, lIdx) => (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newChapterTitle}
+                          onChange={(e) => setNewChapterTitle(e.target.value)}
+                          placeholder={`Tiêu đề ${targetLevelName} mới (Ví dụ: ${targetLevelName} 1: Giới thiệu)...`}
+                          className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleAddChapter(selectedDetail.id)}
+                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shrink-0 shadow-xs"
+                        >
+                          Thêm {targetLevelName}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Chapters Tree List */}
+                    <div className="space-y-2.5 pt-1">
+                      {flatList.length > 0 ? (
+                        flatList.map((ch) => {
+                          const lvl = ch.level || 1;
+                          const lvlName = levels[lvl - 1] || `Cấp ${lvl}`;
+                          const isLeaf = lvl === levels.length;
+                          const indentPx = Math.min((lvl - 1) * 20, 100);
+
+                          const borderColors = [
+                            "border-blue-400 dark:border-blue-600",
+                            "border-indigo-400 dark:border-indigo-600",
+                            "border-purple-400 dark:border-purple-600",
+                            "border-amber-400 dark:border-amber-600",
+                            "border-emerald-400 dark:border-emerald-600",
+                          ];
+                          const bgColors = [
+                            "bg-white dark:bg-stone-900/60",
+                            "bg-blue-50/20 dark:bg-blue-950/10",
+                            "bg-indigo-50/20 dark:bg-indigo-950/10",
+                            "bg-purple-50/20 dark:bg-purple-950/10",
+                            "bg-emerald-50/20 dark:bg-emerald-950/10",
+                          ];
+                          const colorIdx = Math.min(lvl - 1, borderColors.length - 1);
+
+                          return (
                             <div
-                              key={lesson.id}
-                              className="flex items-center justify-between text-xs py-1 text-stone-700 dark:text-stone-300"
+                              key={ch.id}
+                              style={{ marginLeft: `${indentPx}px` }}
+                              className={`p-3.5 rounded-2xl border ${
+                                lvl > 1
+                                  ? `border-l-4 ${borderColors[colorIdx]} ${bgColors[colorIdx]} border-stone-200 dark:border-stone-800`
+                                  : "border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-800/40"
+                              } space-y-2 transition-all`}
                             >
-                              <span className="truncate">
-                                Bài {idx + 1}.{lIdx + 1}: {lesson.title}
-                              </span>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-[10px] text-stone-400">
-                                  {lesson.reading_time_minutes}p
-                                </span>
-                                <Link
-                                  href={`/admin/editor/${lesson.id}`}
-                                  className="text-stone-400 hover:text-blue-600"
-                                >
-                                  <Edit className="w-3 h-3" />
-                                </Link>
-                              </div>
+                              {editingChapterId === ch.id ? (
+                                <div className="space-y-2">
+                                  <input
+                                    type="text"
+                                    value={editingChapterTitle}
+                                    onChange={(e) => setEditingChapterTitle(e.target.value)}
+                                    placeholder={`Tiêu đề ${lvlName}...`}
+                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-400 bg-white dark:bg-stone-900"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={editingChapterDesc}
+                                    onChange={(e) => setEditingChapterDesc(e.target.value)}
+                                    placeholder="Mô tả tóm tắt (Tùy chọn)..."
+                                    className="w-full px-2.5 py-1 text-xs rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
+                                  />
+                                  <div className="flex justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={cancelEditChapter}
+                                      className="text-xs px-2.5 py-1 rounded text-stone-500 hover:text-stone-700"
+                                    >
+                                      Hủy
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveChapter(ch.id)}
+                                      className="text-xs font-semibold px-3 py-1 bg-blue-600 text-white rounded-lg flex items-center gap-1"
+                                    >
+                                      <Check className="w-3 h-3" /> Lưu
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-200 shrink-0">
+                                      {lvlName} {ch.displayNumber}
+                                    </span>
+                                    <span className="font-bold text-xs text-stone-900 dark:text-white truncate">
+                                      {ch.title}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {!isLeaf && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setNewChapterParentId(ch.id);
+                                          window.scrollTo({ top: 300, behavior: "smooth" });
+                                        }}
+                                        className="text-[11px] font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
+                                        title={`Thêm ${levels[lvl] || "mục con"} thuộc ${ch.title}`}
+                                      >
+                                        <Plus className="w-3 h-3" /> Thêm {levels[lvl] || "mục con"}
+                                      </button>
+                                    )}
+
+                                    {isLeaf && (
+                                      <Link
+                                        href={`/admin/editor/new?series_id=${selectedDetail.id}&series_slug=${selectedDetail.slug}&chapter_id=${ch.id}`}
+                                        className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
+                                      >
+                                        <Plus className="w-3 h-3" /> Viết bài vào {lvlName}
+                                      </Link>
+                                    )}
+
+                                    <button
+                                      onClick={() => startEditChapter(ch.id, ch.title, ch.description)}
+                                      className="p-1 text-stone-400 hover:text-amber-600 transition-colors rounded-md"
+                                      title="Sửa tên mục"
+                                    >
+                                      <Edit className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteChapter(ch.id)}
+                                      className="p-1 text-stone-400 hover:text-rose-600 transition-colors rounded-md"
+                                      title="Xóa mục"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {ch.description && (
+                                <p className="text-[11px] text-stone-500 pl-1">{ch.description}</p>
+                              )}
+
+                              {/* Lessons list inside chapter */}
+                              {ch.lessons && ch.lessons.length > 0 && (
+                                <div className="space-y-1 pl-4 border-l-2 border-stone-200 dark:border-stone-700 mt-2">
+                                  {ch.lessons.map((lesson, lIdx) => (
+                                    <div
+                                      key={lesson.id}
+                                      className="flex items-center justify-between text-xs py-1 text-stone-700 dark:text-stone-300"
+                                    >
+                                      <span className="truncate">
+                                        Bài {ch.displayNumber}.{lIdx + 1}: {lesson.title}
+                                      </span>
+                                      <div className="flex items-center gap-2 text-[11px]">
+                                        <Link
+                                          href={`/admin/editor/${lesson.id}?series_id=${selectedDetail.id}&series_slug=${selectedDetail.slug}`}
+                                          className="text-stone-400 hover:text-blue-600"
+                                        >
+                                          Sửa
+                                        </Link>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          ))}
-                        </div>
+                          );
+                        })
                       ) : (
-                        <div className="text-[11px] text-stone-400 italic pl-6">
-                          Chưa có bài viết nào trong chương này.
+                        <div className="text-center py-6 text-xs text-stone-400 italic">
+                          Khóa học này chưa có mục nào trong dàn bài học. Hãy thêm {levels[0]} đầu tiên ở trên!
                         </div>
                       )}
                     </div>
-                  ))
-                ) : (
-                  <div className="p-6 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl text-xs text-stone-400">
-                    Khóa học này chưa có chương nào. Hãy nhập tiêu đề chương ở ô phía trên và bấm "Thêm chương"!
                   </div>
-                )}
-              </div>
+                );
+              })()}
             </div>
           ) : (
             <div className="p-12 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl text-xs text-stone-400">
@@ -812,5 +1091,13 @@ export default function AdminSeriesPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminSeriesPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-stone-400">Đang tải quản lý khóa học...</div>}>
+      <AdminSeriesContent />
+    </Suspense>
   );
 }

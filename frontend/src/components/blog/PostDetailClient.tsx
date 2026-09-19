@@ -19,6 +19,7 @@ import {
   Heart,
   Flag,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { getFullImageUrl, getLikeStatus, toggleLike, reportPost } from "@/lib/api";
 import { PostDetail, REPORT_REASONS } from "@/lib/types";
@@ -356,6 +357,28 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
               className="blog-content leading-relaxed"
               dangerouslySetInnerHTML={{ __html: post.content_html }}
             />
+
+            {/* Course Attribution & Copyright Notice */}
+            {(post.series_outline?.attribution_text ||
+              post.series_outline?.title?.toLowerCase().includes("claude") ||
+              post.series_outline?.title?.toLowerCase().includes("anthropic") ||
+              post.title?.toLowerCase().includes("claude") ||
+              post.title?.toLowerCase().includes("anthropic")) && (
+              <div className="mt-8 p-4 sm:p-5 rounded-2xl border border-amber-200/90 dark:border-amber-900/50 bg-gradient-to-r from-amber-50/70 to-orange-50/40 dark:from-amber-950/20 dark:to-orange-950/10 flex items-start gap-3.5 text-xs shadow-sm">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 shrink-0 border border-amber-200 dark:border-amber-800/80">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div className="space-y-1 flex-1">
+                  <div className="font-bold text-amber-950 dark:text-amber-200 text-[11px] uppercase tracking-wider">
+                    Bản quyền &amp; Nguồn tài liệu gốc
+                  </div>
+                  <p className="text-amber-900/85 dark:text-amber-300/85 leading-relaxed text-xs">
+                    {post.series_outline?.attribution_text ||
+                      "Nội dung bài viết thuộc lộ trình chuẩn bị chứng chỉ Claude Certified Architect, được tổng hợp và biên dịch từ tài liệu đào tạo chính thức của Anthropic PBC. Bản quyền nội dung gốc thuộc về Anthropic PBC. Bản dịch tiếng Việt và chú giải thực hành bởi HungPH Blog."}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Course Navigation Buttons (Bài trước / Bài tiếp theo) */}
             {post.series_outline && (

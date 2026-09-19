@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Any
 from pydantic import BaseModel
 
 
@@ -75,6 +75,8 @@ class ChapterBase(BaseModel):
     title: str
     order: int = 1
     description: Optional[str] = None
+    parent_id: Optional[str] = None
+    level: int = 1
 
 
 class ChapterCreate(ChapterBase):
@@ -85,6 +87,8 @@ class ChapterUpdate(BaseModel):
     title: Optional[str] = None
     order: Optional[int] = None
     description: Optional[str] = None
+    parent_id: Optional[str] = None
+    level: Optional[int] = None
 
 
 class ChapterResponse(ChapterBase):
@@ -98,6 +102,7 @@ class ChapterResponse(ChapterBase):
 
 class ChapterWithLessons(ChapterResponse):
     lessons: List[LessonBrief] = []
+    sub_chapters: List[Any] = []
 
 
 class SeriesBase(BaseModel):
@@ -107,6 +112,8 @@ class SeriesBase(BaseModel):
     cover_image: Optional[str] = None
     is_published: bool = True
     category_id: Optional[str] = None
+    hierarchy_config: Optional[str] = '["Chương"]'
+    attribution_text: Optional[str] = None
 
 
 class SeriesCreate(SeriesBase):
@@ -120,6 +127,8 @@ class SeriesUpdate(BaseModel):
     cover_image: Optional[str] = None
     is_published: Optional[bool] = None
     category_id: Optional[str] = None
+    hierarchy_config: Optional[str] = None
+    attribution_text: Optional[str] = None
 
 
 class SeriesResponse(SeriesBase):
@@ -219,9 +228,14 @@ class CommentCreate(BaseModel):
     parent_id: Optional[str] = None
 
 
+class CommentUpdate(BaseModel):
+    content: str
+
+
 class CommentReplyResponse(BaseModel):
     id: str
     post_id: str
+    user_id: Optional[str] = None
     author_name: str
     author_avatar: Optional[str] = None
     content: str
@@ -235,6 +249,7 @@ class CommentReplyResponse(BaseModel):
 class CommentResponse(BaseModel):
     id: str
     post_id: str
+    user_id: Optional[str] = None
     author_name: str
     author_avatar: Optional[str] = None
     content: str

@@ -77,7 +77,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-base sm:text-lg text-stone-600 dark:text-stone-400 leading-relaxed">
-            Chào mừng bạn đến với blog cá nhân của Hung Pham Hoang. Nơi chia sẻ kinh nghiệm phát triển phần mềm, thiết kế hệ thống, AI RAG và hành trình tự học mỗi ngày.
+            Chào mừng bạn đến với blog cá nhân của Phạm Hoàng Hưng. Nơi chia sẻ về cuộc sống, IT và hành trình tự học mỗi ngày.
           </p>
 
           {/* Search Bar */}
@@ -175,11 +175,10 @@ export default function HomePage() {
               setSelectedCategory("");
               setCurrentPage(1);
             }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
-              selectedCategory === ""
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${selectedCategory === ""
                 ? "bg-stone-900 dark:bg-white text-white dark:text-stone-900 shadow-sm"
                 : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700"
-            }`}
+              }`}
           >
             Tất cả bài viết
           </button>
@@ -190,11 +189,10 @@ export default function HomePage() {
                 setSelectedCategory(cat.slug);
                 setCurrentPage(1);
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                selectedCategory === cat.slug
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${selectedCategory === cat.slug
                   ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20"
                   : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700"
-              }`}
+                }`}
             >
               {cat.name}
             </button>

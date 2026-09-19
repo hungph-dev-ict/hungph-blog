@@ -1,3 +1,4 @@
+import json
 import math
 import re
 from datetime import datetime, timezone
@@ -24,6 +25,7 @@ from app.modules.blog.schemas import (
     CommentCreate,
     CommentReplyResponse,
     CommentResponse,
+    CommentUpdate,
     LessonBrief,
     PaginatedPosts,
     PostCreate,
@@ -237,6 +239,8 @@ async def get_post_by_slug(
                 cover_image=series_obj.cover_image,
                 is_published=series_obj.is_published,
                 category_id=series_obj.category_id,
+                hierarchy_config=series_obj.hierarchy_config,
+                attribution_text=series_obj.attribution_text,
                 created_at=series_obj.created_at,
                 category=CategoryResponse.model_validate(series_obj.category) if series_obj.category else None,
                 total_chapters=len(chapters_data),
@@ -282,7 +286,25 @@ async def get_post_by_id(
     if not is_admin and post.author_id != current_user.id:
         raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập bài viết này")
 
-    return PostDetail.model_validate(post)
+    post_detail = PostDetail.model_validate(post)
+    if post.series:
+        post_detail.series_outline = SeriesDetailResponse(
+            id=post.series.id,
+            title=post.series.title,
+            slug=post.series.slug,
+            summary=post.series.summary,
+            cover_image=post.series.cover_image,
+            is_published=post.series.is_published,
+            category_id=post.series.category_id,
+            hierarchy_config=post.series.hierarchy_config,
+            attribution_text=post.series.attribution_text,
+            created_at=post.series.created_at,
+            category=CategoryResponse.model_validate(post.series.category) if post.series.category else None,
+            total_chapters=0,
+            total_lessons=0,
+            chapters=[]
+        )
+    return post_detail
 
 
 async def check_series_write_permission(db: AsyncSession, series_id: str, user: User):
@@ -332,6 +354,82 @@ async def check_series_edit_permission(db: AsyncSession, series_id: str, user: U
     return series
 
 
+async def validate_post_series_hierarchy(
+    db: AsyncSession,
+    series_id: Optional[str],
+    chapter_id: Optional[str],
+) -> Optional[Chapter]:
+    """
+    Kiểm tra tính hợp lệ của phân cấp khóa học khi viết/sửa bài:
+    - Nếu bài viết thuộc khóa học có cấu hình phân cấp (N cấp), bài viết PHẢI chọn đủ tất cả các cấp (gán vào chapter cấp N).
+    - Chapter được chọn phải thuộc series đó và có level == len(hierarchy_levels).
+    - Chuỗi parent_id phải nối liên tục từ level N lên level 1.
+    """
+    if not series_id:
+        return None
+
+    stmt = select(Series).where(Series.id == series_id)
+    series_res = await db.execute(stmt)
+    series = series_res.scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Khóa học không tồn tại")
+
+    levels: List[str] = []
+    if series.hierarchy_config:
+        try:
+            parsed = json.loads(series.hierarchy_config)
+            if isinstance(parsed, list) and len(parsed) > 0:
+                levels = [str(lvl).strip() for lvl in parsed if str(lvl).strip()]
+        except Exception:
+            pass
+
+    if not levels:
+        return None
+
+    expected_depth = len(levels)
+
+    if not chapter_id:
+        levels_str = " > ".join(levels)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bài viết thuộc khóa học '{series.title}' yêu cầu phải chọn đầy đủ {expected_depth} cấp phân mục ({levels_str})."
+        )
+
+    ch_stmt = select(Chapter).where(Chapter.id == chapter_id)
+    ch_res = await db.execute(ch_stmt)
+    chapter = ch_res.scalar_one_or_none()
+    if not chapter:
+        raise HTTPException(status_code=400, detail="Mục phân cấp đã chọn không tồn tại")
+
+    if chapter.series_id != series.id:
+        raise HTTPException(status_code=400, detail="Mục phân cấp không thuộc khóa học này")
+
+    if (chapter.level or 1) != expected_depth:
+        leaf_name = levels[-1]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bài viết phải được xếp vào cấp cuối cùng '{leaf_name}' (Cấp {expected_depth}/{expected_depth}). Mục đang chọn thuộc cấp {chapter.level or 1}."
+        )
+
+    # Lần ngược cây phả hệ để đảm bảo chuỗi parent_id hợp lệ từ level N lên level 1
+    curr = chapter
+    for expected_lvl in range(expected_depth, 1, -1):
+        if not curr.parent_id:
+            parent_level_name = levels[expected_lvl - 2] if expected_lvl - 2 < len(levels) else f"Cấp {expected_lvl - 1}"
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cấu trúc phân cấp không hoàn chỉnh: Mục '{curr.title}' ở cấp {curr.level or 1} thiếu mục cha ở cấp '{parent_level_name}'."
+            )
+        p_stmt = select(Chapter).where(Chapter.id == curr.parent_id)
+        p_res = await db.execute(p_stmt)
+        parent_ch = p_res.scalar_one_or_none()
+        if not parent_ch or parent_ch.series_id != series.id:
+            raise HTTPException(status_code=400, detail=f"Không tìm thấy mục cha hợp lệ của '{curr.title}'.")
+        curr = parent_ch
+
+    return chapter
+
+
 async def notify_followers_new_post(db: AsyncSession, post: Post, author: User):
     """Gửi thông báo bài viết mới tới những người đang theo dõi tác giả."""
     try:
@@ -365,6 +463,7 @@ async def create_post(
 ):
     if post_in.series_id:
         await check_series_write_permission(db, post_in.series_id, current_user)
+        await validate_post_series_hierarchy(db, post_in.series_id, post_in.chapter_id)
 
     slug = await make_unique_slug(db, post_in.slug or post_in.title, model_cls=Post)
     reading_time = calculate_reading_time(post_in.content_html or post_in.content_markdown or "")
@@ -372,6 +471,12 @@ async def create_post(
 
     now = datetime.now(timezone.utc)
     published_at = now if post_in.is_published else None
+
+    # Auto inherit category from series if not specified
+    category_id = post_in.category_id if post_in.category_id != "" else None
+    if not category_id and post_in.series_id:
+        s_cat_stmt = select(Series.category_id).where(Series.id == post_in.series_id)
+        category_id = (await db.execute(s_cat_stmt)).scalar_one_or_none()
 
     new_post = Post(
         title=post_in.title.strip(),
@@ -384,7 +489,7 @@ async def create_post(
         published_at=published_at,
         reading_time_minutes=reading_time,
         author_id=current_user.id,
-        category_id=post_in.category_id if post_in.category_id != "" else None,
+        category_id=category_id,
         series_id=post_in.series_id if post_in.series_id != "" else None,
         chapter_id=post_in.chapter_id if post_in.chapter_id != "" else None,
         order_in_chapter=post_in.order_in_chapter or 1,
@@ -448,8 +553,12 @@ async def update_post(
 
     if post_in.title is not None:
         post.title = post_in.title.strip()
-    if post_in.slug is not None:
+    if post_in.slug is not None and post_in.slug.strip():
         post.slug = await make_unique_slug(db, post_in.slug, model_cls=Post, current_id=post.id)
+    elif post_in.title is not None and (post_in.slug is None or post_in.slug == ""):
+        # Tự động cập nhật slug theo tiêu đề mới nếu slug không được chỉ định riêng
+        post.slug = await make_unique_slug(db, post_in.title, model_cls=Post, current_id=post.id)
+
     if post_in.summary is not None:
         post.summary = post_in.summary.strip() if post_in.summary else None
     if post_in.content_html is not None:
@@ -459,14 +568,27 @@ async def update_post(
         post.content_markdown = post_in.content_markdown
     if post_in.cover_image is not None:
         post.cover_image = post_in.cover_image
-    if post_in.category_id is not None:
-        post.category_id = post_in.category_id if post_in.category_id != "" else None
+
     if post_in.series_id is not None:
         post.series_id = post_in.series_id if post_in.series_id != "" else None
-    if post_in.chapter_id is not None:
+        if not post.series_id:
+            post.chapter_id = None
+    if post_in.chapter_id is not None and post.series_id:
         post.chapter_id = post_in.chapter_id if post_in.chapter_id != "" else None
     if post_in.order_in_chapter is not None:
         post.order_in_chapter = post_in.order_in_chapter
+
+    if post.series_id:
+        await validate_post_series_hierarchy(db, post.series_id, post.chapter_id)
+
+    if post_in.category_id is not None and post_in.category_id != "":
+        post.category_id = post_in.category_id
+    elif (post_in.category_id == "" or post.category_id is None) and (post_in.series_id or post.series_id):
+        target_s_id = post_in.series_id or post.series_id
+        s_cat_stmt = select(Series.category_id).where(Series.id == target_s_id)
+        s_cat = (await db.execute(s_cat_stmt)).scalar_one_or_none()
+        if s_cat:
+            post.category_id = s_cat
 
     if post_in.is_published is not None:
         if post_in.is_published and not post.is_published and not post.published_at:
@@ -634,6 +756,8 @@ async def list_series(
             cover_image=s.cover_image,
             is_published=s.is_published,
             category_id=s.category_id,
+            hierarchy_config=s.hierarchy_config,
+            attribution_text=s.attribution_text,
             created_at=s.created_at,
             category=CategoryResponse.model_validate(s.category) if s.category else None,
             total_chapters=tot_chapters,
@@ -670,6 +794,8 @@ async def get_series_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
                 title=ch.title,
                 order=ch.order,
                 description=ch.description,
+                parent_id=ch.parent_id,
+                level=ch.level or 1,
                 created_at=ch.created_at,
                 lessons=[LessonBrief.model_validate(p) for p in posts]
             )
@@ -683,6 +809,8 @@ async def get_series_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
         cover_image=s.cover_image,
         is_published=s.is_published,
         category_id=s.category_id,
+        hierarchy_config=s.hierarchy_config,
+        attribution_text=s.attribution_text,
         created_at=s.created_at,
         category=CategoryResponse.model_validate(s.category) if s.category else None,
         total_chapters=len(chapters_data),
@@ -705,7 +833,9 @@ async def create_series(
         cover_image=series_in.cover_image,
         is_published=series_in.is_published,
         owner_id=admin.id,
-        category_id=series_in.category_id if series_in.category_id != "" else None
+        category_id=series_in.category_id if series_in.category_id != "" else None,
+        hierarchy_config=series_in.hierarchy_config or '["Chương"]',
+        attribution_text=series_in.attribution_text
     )
     db.add(new_series)
     await db.commit()
@@ -719,6 +849,8 @@ async def create_series(
         cover_image=new_series.cover_image,
         is_published=new_series.is_published,
         category_id=new_series.category_id,
+        hierarchy_config=new_series.hierarchy_config,
+        attribution_text=new_series.attribution_text,
         created_at=new_series.created_at,
         total_chapters=0,
         total_lessons=0
@@ -746,6 +878,10 @@ async def update_series(
         s.is_published = series_in.is_published
     if series_in.category_id is not None:
         s.category_id = series_in.category_id if series_in.category_id != "" else None
+    if series_in.hierarchy_config is not None:
+        s.hierarchy_config = series_in.hierarchy_config
+    if series_in.attribution_text is not None:
+        s.attribution_text = series_in.attribution_text
 
     await db.commit()
     await db.refresh(s)
@@ -757,6 +893,8 @@ async def update_series(
         cover_image=s.cover_image,
         is_published=s.is_published,
         category_id=s.category_id,
+        hierarchy_config=s.hierarchy_config,
+        attribution_text=s.attribution_text,
         created_at=s.created_at,
         category=CategoryResponse.model_validate(s.category) if s.category else None,
         total_chapters=len(s.chapters),
@@ -794,13 +932,42 @@ async def add_chapter_to_series(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    await check_series_edit_permission(db, series_id, current_user)
+    series = await check_series_edit_permission(db, series_id, current_user)
+
+    parent_id = chapter_in.parent_id if chapter_in.parent_id != "" else None
+    computed_level = 1
+    if parent_id:
+        p_stmt = select(Chapter).where(Chapter.id == parent_id, Chapter.series_id == series_id)
+        p_res = await db.execute(p_stmt)
+        parent_ch = p_res.scalar_one_or_none()
+        if not parent_ch:
+            raise HTTPException(status_code=400, detail="Mục cha (parent) không tồn tại hoặc không thuộc khóa học này")
+        computed_level = (parent_ch.level or 1) + 1
+    elif chapter_in.level and chapter_in.level > 1:
+        computed_level = chapter_in.level
+    else:
+        computed_level = 1
+
+    # Kiểm tra không vượt quá số cấp của khóa học nếu đã định hình cấu trúc
+    if series.hierarchy_config:
+        try:
+            parsed = json.loads(series.hierarchy_config)
+            if isinstance(parsed, list) and len(parsed) > 0:
+                if computed_level > len(parsed):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Cấp độ mới (Cấp {computed_level}) vượt quá số cấp tối đa của khóa học ({len(parsed)} cấp: {', '.join(parsed)})."
+                    )
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     ch = Chapter(
         series_id=series_id,
         title=chapter_in.title.strip(),
         order=chapter_in.order,
-        description=chapter_in.description
+        description=chapter_in.description,
+        parent_id=parent_id,
+        level=computed_level
     )
     db.add(ch)
     await db.commit()
@@ -829,6 +996,10 @@ async def update_chapter(
         ch.order = ch_in.order
     if ch_in.description is not None:
         ch.description = ch_in.description
+    if ch_in.parent_id is not None:
+        ch.parent_id = ch_in.parent_id if ch_in.parent_id != "" else None
+    if ch_in.level is not None:
+        ch.level = ch_in.level
 
     await db.commit()
     await db.refresh(ch)
@@ -936,6 +1107,7 @@ async def create_comment(
     return CommentResponse(
         id=new_comment.id,
         post_id=new_comment.post_id,
+        user_id=new_comment.user_id,
         author_name=new_comment.author_name,
         author_avatar=new_comment.author_avatar,
         content=new_comment.content,
@@ -945,13 +1117,40 @@ async def create_comment(
     )
 
 
+@router.put("/comments/{comment_id}", response_model=CommentResponse)
+async def update_comment(
+    comment_id: str,
+    comment_in: CommentUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Chỉnh sửa nội dung bình luận (Chỉ tác giả hoặc Admin)."""
+    stmt = select(Comment).where(Comment.id == comment_id).options(selectinload(Comment.replies))
+    res = await db.execute(stmt)
+    comment = res.scalar_one_or_none()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Bình luận không tồn tại")
+
+    if not current_user.is_admin and comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bạn chỉ có quyền chỉnh sửa bình luận của chính mình")
+
+    content = comment_in.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Nội dung bình luận không được để trống")
+
+    comment.content = content
+    await db.commit()
+    await db.refresh(comment)
+    return CommentResponse.model_validate(comment)
+
+
 @router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_comment(
     comment_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Xóa bình luận (Dành cho Admin hoặc chính người đã viết bình luận)."""
+    """Xóa bình luận / Thu hồi (Dành cho Admin hoặc chính người đã viết bình luận)."""
     stmt = select(Comment).where(Comment.id == comment_id)
     res = await db.execute(stmt)
     comment = res.scalar_one_or_none()
