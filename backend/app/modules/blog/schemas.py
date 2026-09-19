@@ -52,6 +52,7 @@ class AuthorBrief(BaseModel):
     id: str
     username: str
     full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
     class Config:
         from_attributes = True

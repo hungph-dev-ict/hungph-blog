@@ -47,12 +47,17 @@ class Series(Base):
     summary = Column(Text, nullable=True)
     cover_image = Column(String(500), nullable=True)
     is_published = Column(Boolean, default=True)
-    
+
+    # Ownership
+    owner_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    owner = relationship("User", foreign_keys=[owner_id], lazy="selectin")
+
     category_id = Column(String(36), ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
     category = relationship("Category", back_populates="series", lazy="selectin")
 
     chapters = relationship("Chapter", back_populates="series", cascade="all, delete-orphan", order_by="Chapter.order", lazy="selectin")
     posts = relationship("Post", back_populates="series", lazy="selectin")
+    collaborators = relationship("SeriesCollaborator", back_populates="series", cascade="all, delete-orphan", lazy="selectin")
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -100,13 +105,65 @@ class Post(Base):
 
     category = relationship("Category", back_populates="posts", lazy="selectin")
     tags = relationship("Tag", secondary=post_tags, back_populates="posts", lazy="selectin")
-    author = relationship("app.modules.auth.models.User", lazy="selectin")
+    author = relationship("User", lazy="selectin")
     series = relationship("Series", back_populates="posts", lazy="selectin")
     chapter = relationship("Chapter", back_populates="posts", lazy="selectin")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan", order_by="Comment.created_at.desc()", lazy="selectin")
+    likes = relationship("PostLike", back_populates="post", cascade="all, delete-orphan", lazy="selectin")
+    reports = relationship("PostReport", back_populates="post", cascade="all, delete-orphan", lazy="selectin")
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class SeriesCollaborator(Base):
+    """Yêu cầu cộng tác biên soạn khoá học."""
+    __tablename__ = "series_collaborators"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    series_id = Column(String(36), ForeignKey("series.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # pending | accepted | rejected
+    status = Column(String(20), default="pending", nullable=False)
+    message = Column(String(500), nullable=True)  # lý do xin tham gia
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    series = relationship("Series", back_populates="collaborators")
+    user = relationship("User", foreign_keys=[user_id], lazy="selectin")
+
+
+class PostLike(Base):
+    """Lượt thả tim bài viết."""
+    __tablename__ = "post_likes"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    post_id = Column(String(36), ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    post = relationship("Post", back_populates="likes")
+    user = relationship("User", foreign_keys=[user_id], lazy="selectin")
+
+
+class PostReport(Base):
+    """Tố cáo bài viết."""
+    __tablename__ = "post_reports"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    post_id = Column(String(36), ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    reporter_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    # spam | inappropriate | misinformation | copyright | other
+    reason = Column(String(50), nullable=False)
+    description = Column(String(1000), nullable=True)
+    # pending | reviewed | dismissed | action_taken
+    status = Column(String(20), default="pending", nullable=False)
+    admin_note = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    post = relationship("Post", back_populates="reports")
+    reporter = relationship("User", foreign_keys=[reporter_id], lazy="selectin")
 
 
 class Comment(Base):
@@ -127,6 +184,6 @@ class Comment(Base):
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    user = relationship("app.modules.auth.models.User", lazy="selectin")
+    user = relationship("User", lazy="selectin")
     post = relationship("Post", back_populates="comments")
     replies = relationship("Comment", cascade="all, delete-orphan", order_by="Comment.created_at.asc()", lazy="selectin")

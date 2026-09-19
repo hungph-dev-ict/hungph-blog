@@ -15,20 +15,25 @@ from app.modules.blog.router import router as blog_router
 from app.modules.media.router import router as media_router
 from app.modules.rag.router import router as rag_router
 from app.modules.utilities.router import router as utilities_router
+from app.modules.social.models import Follow, Notification  # registers tables
+from app.modules.social.router import router as social_router
 
 
 async def init_default_data():
     """Tự động khởi tạo bảng và dữ liệu mẫu nếu database đang trống."""
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        # Bổ sung các cột mới nếu bảng users đã tồn tại trước đó
+        from sqlalchemy import text
+        # Bổ sung cột mới cho các bảng đã tồn tại TRƯỚC khi create_all
         try:
-            from sqlalchemy import text
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500);"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(100);"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'member';"))
+            # Social features
+            await conn.execute(text("ALTER TABLE series ADD COLUMN IF NOT EXISTS owner_id VARCHAR(36);"))
         except Exception as mig_err:
-            print(f"Migration note: {mig_err}")
+            print(f"Migration note (pre-create): {mig_err}")
+        # Tạo tất cả bảng mới (new tables from social module)
+        await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSessionLocal() as db:
         # Kiểm tra Admin
@@ -253,6 +258,7 @@ app.include_router(blog_router, prefix=settings.API_V1_STR)
 app.include_router(media_router, prefix=settings.API_V1_STR)
 app.include_router(rag_router, prefix=settings.API_V1_STR)
 app.include_router(utilities_router, prefix=settings.API_V1_STR)
+app.include_router(social_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

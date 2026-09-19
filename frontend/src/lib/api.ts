@@ -1,16 +1,22 @@
 import {
   Category,
   Chapter,
+  Collaborator,
   Comment,
+  FollowStatus,
+  LikeStatus,
   LoginResponse,
+  Notification,
   PaginatedPosts,
   PostDetail,
   PostListItem,
+  PostReport,
   Series,
   SeriesDetail,
   Tag,
   UploadResponse,
   User,
+  UserProfile,
 } from "./types";
 
 export const API_BASE_URL =
@@ -508,4 +514,164 @@ export async function deleteUser(userId: string, token: string): Promise<void> {
   if (!res.ok) {
     throw new Error("Không thể xóa thành viên");
   }
+}
+
+// ── Social: Follow ────────────────────────────────────────────────
+
+export async function toggleFollow(userId: string, token: string): Promise<FollowStatus> {
+  const res = await fetch(`${API_BASE_URL}/social/follow/${userId}`, {
+    method: "POST",
+    headers: getHeaders(token),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getFollowStatus(userId: string, token?: string): Promise<FollowStatus> {
+  const res = await fetch(`${API_BASE_URL}/social/follow-status/${userId}`, {
+    headers: token ? getHeaders(token) : {},
+  });
+  return res.json();
+}
+
+export async function getUserProfile(username: string): Promise<UserProfile> {
+  const res = await fetch(`${API_BASE_URL}/social/profile/${username}`);
+  if (!res.ok) throw new Error("Không tìm thấy người dùng");
+  return res.json();
+}
+
+// ── Social: Notifications ────────────────────────────────────────
+
+export async function getNotifications(token: string, limit = 20, offset = 0): Promise<Notification[]> {
+  const res = await fetch(`${API_BASE_URL}/notifications/?limit=${limit}&offset=${offset}`, {
+    headers: getHeaders(token),
+  });
+  return res.json();
+}
+
+export async function getUnreadCount(token: string): Promise<number> {
+  const res = await fetch(`${API_BASE_URL}/notifications/unread-count`, {
+    headers: getHeaders(token),
+  });
+  const data = await res.json();
+  return data.count ?? 0;
+}
+
+export async function markNotificationRead(id: string, token: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+    method: "PUT",
+    headers: getHeaders(token),
+  });
+}
+
+export async function markAllNotificationsRead(token: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/notifications/read-all`, {
+    method: "PUT",
+    headers: getHeaders(token),
+  });
+}
+
+// ── Social: Likes ───────────────────────────────────────────────
+
+export async function toggleLike(postId: string, token: string): Promise<LikeStatus> {
+  const res = await fetch(`${API_BASE_URL}/blog/posts/${postId}/like`, {
+    method: "POST",
+    headers: getHeaders(token),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getLikeStatus(postId: string, token?: string): Promise<LikeStatus> {
+  const res = await fetch(`${API_BASE_URL}/blog/posts/${postId}/like-status`, {
+    headers: token ? getHeaders(token) : {},
+  });
+  return res.json();
+}
+
+// ── Social: Reports ───────────────────────────────────────────
+
+export async function reportPost(
+  postId: string,
+  reason: string,
+  description: string | undefined,
+  token: string
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/blog/posts/${postId}/report`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify({ reason, description }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể gửi tố cáo");
+  }
+}
+
+export async function getAdminReports(token: string, status?: string): Promise<PostReport[]> {
+  const url = status
+    ? `${API_BASE_URL}/blog/admin/reports?status=${status}`
+    : `${API_BASE_URL}/blog/admin/reports`;
+  const res = await fetch(url, { headers: getHeaders(token) });
+  return res.json();
+}
+
+export async function updateReport(
+  reportId: string,
+  status: string,
+  adminNote: string | undefined,
+  token: string
+): Promise<PostReport> {
+  const res = await fetch(`${API_BASE_URL}/blog/admin/reports/${reportId}`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify({ status, admin_note: adminNote }),
+  });
+  return res.json();
+}
+
+// ── Collaboration ───────────────────────────────────────────────
+
+export async function requestCollaboration(
+  seriesId: string,
+  message: string | undefined,
+  token: string
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/blog/series/${seriesId}/request-collaboration`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể gửi yêu cầu");
+  }
+}
+
+export async function getCollaborators(seriesId: string, token: string): Promise<Collaborator[]> {
+  const res = await fetch(`${API_BASE_URL}/blog/series/${seriesId}/collaborators`, {
+    headers: getHeaders(token),
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function updateCollaborator(
+  seriesId: string,
+  userId: string,
+  status: "accepted" | "rejected",
+  token: string
+): Promise<void> {
+  await fetch(`${API_BASE_URL}/blog/series/${seriesId}/collaborators/${userId}`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function removeCollaborator(seriesId: string, userId: string, token: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/blog/series/${seriesId}/collaborators/${userId}`, {
+    method: "DELETE",
+    headers: getHeaders(token),
+  });
 }

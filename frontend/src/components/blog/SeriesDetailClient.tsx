@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -10,9 +10,13 @@ import {
   Play,
   CheckCircle2,
   ChevronRight,
+  Users,
+  Send,
+  X,
 } from "lucide-react";
-import { getFullImageUrl } from "@/lib/api";
+import { getFullImageUrl, requestCollaboration } from "@/lib/api";
 import { SeriesDetail } from "@/lib/types";
+import { useAuth } from "@/lib/auth-context";
 
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 
@@ -22,6 +26,35 @@ interface SeriesDetailClientProps {
 
 export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialSeries: series }) => {
   const router = useRouter();
+  const { user, token } = useAuth();
+  const [showCollabModal, setShowCollabModal] = useState(false);
+  const [collabMessage, setCollabMessage] = useState("");
+  const [collabSubmitting, setCollabSubmitting] = useState(false);
+  const [collabSuccess, setCollabSuccess] = useState(false);
+  const [collabError, setCollabError] = useState("");
+
+  const handleCollabSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) {
+      alert("Vui lòng đăng nhập để gửi yêu cầu cộng tác!");
+      return;
+    }
+    setCollabSubmitting(true);
+    setCollabError("");
+    try {
+      await requestCollaboration(series.id, collabMessage.trim() || undefined, token);
+      setCollabSuccess(true);
+      setTimeout(() => {
+        setShowCollabModal(false);
+        setCollabSuccess(false);
+        setCollabMessage("");
+      }, 2500);
+    } catch (err: unknown) {
+      setCollabError(err instanceof Error ? err.message : "Gửi yêu cầu thất bại");
+    } finally {
+      setCollabSubmitting(false);
+    }
+  };
 
   // Find first lesson for the "Start Course" button
   const firstLesson =
@@ -76,8 +109,8 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
               </p>
             )}
 
-            {firstLesson && (
-              <div className="pt-2">
+            <div className="pt-2 flex flex-wrap items-center gap-3">
+              {firstLesson && (
                 <Link
                   href={`/posts/${firstLesson.slug}`}
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-all hover:scale-[1.02]"
@@ -85,8 +118,21 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                   <Play className="w-4 h-4 fill-white" />
                   <span>Bắt đầu học (Bài 1: {firstLesson.title})</span>
                 </Link>
-              </div>
-            )}
+              )}
+              <button
+                onClick={() => {
+                  if (!user) {
+                    alert("Vui lòng đăng nhập để gửi yêu cầu cộng tác!");
+                    return;
+                  }
+                  setShowCollabModal(true);
+                }}
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-semibold text-sm transition-all border border-stone-200 dark:border-stone-700 hover:scale-[1.02]"
+              >
+                <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Xin cộng tác biên soạn</span>
+              </button>
+            </div>
           </div>
 
           {/* Cover image or illustration */}
@@ -185,6 +231,101 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
           ))}
         </div>
       </section>
+
+      {/* Collaboration Request Modal */}
+      {showCollabModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowCollabModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-6 sm:p-8 w-full max-w-lg shadow-2xl space-y-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-stone-900 dark:text-white">
+                    Xin cộng tác biên soạn
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Khoá học: {series.title}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCollabModal(false)}
+                className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {collabSuccess ? (
+              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-center space-y-2">
+                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                  🎉 Yêu cầu đã được gửi thành công!
+                </p>
+                <p className="text-xs text-emerald-600/80">
+                  Tác giả sở hữu khoá học sẽ nhận được thông báo để phê duyệt quyền biên soạn cho bạn.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleCollabSubmit} className="space-y-4">
+                <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
+                  Khi được tác giả chấp thuận, bạn sẽ có quyền đồng biên soạn, thêm bài viết mới và sắp xếp lộ trình trong khoá học này.
+                </p>
+
+                {collabError && (
+                  <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-600 font-medium">
+                    {collabError}
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                    Lời nhắn gửi tác giả (tuỳ chọn)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={collabMessage}
+                    onChange={(e) => setCollabMessage(e.target.value)}
+                    placeholder="Giới thiệu bản thân, chủ đề bạn dự định đóng góp hoặc kinh nghiệm liên quan..."
+                    className="w-full text-sm p-3.5 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCollabModal(false)}
+                    className="px-4 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={collabSubmitting}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all"
+                  >
+                    {collabSubmitting ? (
+                      <span>Đang gửi...</span>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Gửi yêu cầu</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

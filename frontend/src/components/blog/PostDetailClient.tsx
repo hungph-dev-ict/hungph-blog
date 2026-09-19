@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,12 +16,16 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
+  Heart,
+  Flag,
+  X,
 } from "lucide-react";
-import { getFullImageUrl } from "@/lib/api";
-import { PostDetail } from "@/lib/types";
+import { getFullImageUrl, getLikeStatus, toggleLike, reportPost } from "@/lib/api";
+import { PostDetail, REPORT_REASONS } from "@/lib/types";
 import { TableOfContents } from "@/components/blog/TableOfContents";
 import { ReadingProgressBar } from "@/components/blog/ReadingProgressBar";
 import { CommentSection } from "@/components/blog/CommentSection";
+import { useAuth } from "@/lib/auth-context";
 
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 
@@ -31,7 +35,52 @@ interface PostDetailClientProps {
 
 export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost: post }) => {
   const router = useRouter();
+  const { user, token } = useAuth();
   const [copied, setCopied] = useState<boolean>(false);
+  const [liked, setLiked] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
+  const [likeLoading, setLikeLoading] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDesc, setReportDesc] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportDone, setReportDone] = useState(false);
+
+  useEffect(() => {
+    getLikeStatus(post.id, token || undefined).then((s) => {
+      setLiked(s.liked);
+      setLikesCount(s.likes_count);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id, token]);
+
+  const handleLike = async () => {
+    if (!user || !token) { alert("Vui lòng đăng nhập để thả tim"); return; }
+    if (likeLoading) return;
+    setLikeLoading(true);
+    try {
+      const result = await toggleLike(post.id, token);
+      setLiked(result.liked);
+      setLikesCount(result.likes_count);
+    } finally {
+      setLikeLoading(false);
+    }
+  };
+
+  const handleReport = async () => {
+    if (!user || !token) { alert("Vui lòng đăng nhập để tố cáo"); return; }
+    if (!reportReason) { alert("Vui lòng chọn lý do"); return; }
+    setReportLoading(true);
+    try {
+      await reportPost(post.id, reportReason, reportDesc || undefined, token);
+      setReportDone(true);
+      setTimeout(() => { setShowReport(false); setReportDone(false); setReportReason(""); setReportDesc(""); }, 2000);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Lỗi không xác định");
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   const copyShareLink = () => {
     if (typeof window !== "undefined") {
@@ -151,17 +200,29 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
 
           {/* Author & Share Bar */}
           <div className="flex items-center justify-between pt-2">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow">
-                {post.author?.full_name?.charAt(0) || post.author?.username?.charAt(0) || "H"}
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  {post.author?.full_name || post.author?.username || "Hung Pham Hoang"}
+            <Link
+              href={post.author?.username ? `/profile/${post.author.username}` : "#"}
+              className="flex items-center gap-3 group"
+              title="Xem trang cá nhân & theo dõi"
+            >
+              {post.author?.avatar_url ? (
+                <img
+                  src={post.author.avatar_url}
+                  alt={post.author.username}
+                  className="w-10 h-10 rounded-full object-cover shadow group-hover:ring-2 group-hover:ring-blue-500 transition-all"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow group-hover:scale-105 transition-transform">
+                  {post.author?.full_name?.charAt(0) || post.author?.username?.charAt(0) || "H"}
                 </div>
-                <div className="text-xs text-stone-500">Tác giả & Kỹ sư phần mềm</div>
+              )}
+              <div>
+                <div className="text-sm font-semibold text-stone-900 dark:text-stone-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1.5">
+                  <span>{post.author?.full_name || post.author?.username || "Hung Pham Hoang"}</span>
+                </div>
+                <div className="text-xs text-stone-500">Tác giả & Kỹ sư phần mềm • <span className="text-blue-500 font-medium">Xem hồ sơ</span></div>
               </div>
-            </div>
+            </Link>
 
             <button
               onClick={copyShareLink}
@@ -180,8 +241,102 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                 </>
               )}
             </button>
+
+            {/* Like Button */}
+            <button
+              onClick={handleLike}
+              title={liked ? "Bỏ thích" : "Thích bài viết"}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                liked
+                  ? "border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400"
+                  : "border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:border-rose-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+              }`}
+            >
+              <Heart className={`w-3.5 h-3.5 transition-transform ${liked ? "fill-rose-500 scale-110" : ""}`} />
+              <span>{liked ? "Đã thích" : "Thích"}</span>
+              {likesCount > 0 && <span className="font-bold">{likesCount}</span>}
+            </button>
+
+            {/* Report Button */}
+            {user && (
+              <button
+                onClick={() => setShowReport(true)}
+                title="Tố cáo bài viết"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 text-xs font-medium text-stone-400 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all"
+              >
+                <Flag className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tố cáo</span>
+              </button>
+            )}
           </div>
         </header>
+
+        {/* Report Modal */}
+        {showReport && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowReport(false)}>
+            <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Flag className="w-5 h-5 text-rose-500" />
+                  <h3 className="text-lg font-bold text-stone-900 dark:text-white">Tố cáo bài viết</h3>
+                </div>
+                <button onClick={() => setShowReport(false)} className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {reportDone ? (
+                <div className="text-center py-6">
+                  <div className="text-4xl mb-2">✅</div>
+                  <p className="font-semibold text-stone-900 dark:text-white">Tố cáo đã được gửi!</p>
+                  <p className="text-sm text-stone-500 mt-1">Chúng tôi sẽ xem xét sớm nhất có thể.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-stone-500 mb-4">Chọn lý do tố cáo bài viết này:</p>
+
+                  <div className="space-y-2 mb-4">
+                    {Object.entries(REPORT_REASONS).map(([key, label]) => (
+                      <label key={key} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all ${
+                        reportReason === key
+                          ? "border-rose-400 bg-rose-50 dark:bg-rose-950/30"
+                          : "border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600"
+                      }`}>
+                        <input
+                          type="radio"
+                          name="report_reason"
+                          value={key}
+                          checked={reportReason === key}
+                          onChange={() => setReportReason(key)}
+                          className="accent-rose-500"
+                        />
+                        <span className="text-sm text-stone-800 dark:text-stone-200">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <textarea
+                    value={reportDesc}
+                    onChange={(e) => setReportDesc(e.target.value)}
+                    placeholder="Mô tả thêm (tùy chọn)..."
+                    rows={3}
+                    className="w-full text-sm px-3 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-rose-400 resize-none mb-4"
+                  />
+
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowReport(false)} className="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 text-sm font-semibold hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors">
+                      Hủy
+                    </button>
+                    <button onClick={handleReport} disabled={reportLoading || !reportReason} className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+                      {reportLoading ? "Đang gửi..." : "Gửi tố cáo"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
 
         {/* Cover Image Banner */}
         {post.cover_image && (

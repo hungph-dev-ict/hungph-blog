@@ -1,27 +1,40 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import {
+  Bell,
   BookOpen,
   Compass,
   GraduationCap,
   Moon,
   PenTool,
-  Sparkles,
   Sun,
-  Wrench,
-  User as UserIcon,
   LogOut,
+  Flag,
 } from "lucide-react";
 import { GoogleLoginButton } from "./GoogleLoginButton";
+import { getUnreadCount, getNotifications, markAllNotificationsRead } from "@/lib/api";
+import { Notification } from "@/lib/types";
+
+const NOTIF_ICONS: Record<string, string> = {
+  collab_request: "🤝",
+  collab_accepted: "✅",
+  collab_rejected: "❌",
+  new_follower: "👤",
+  new_post: "📝",
+};
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const [isDark, setIsDark] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -34,6 +47,46 @@ export const Header: React.FC = () => {
       setIsDark(false);
     }
   }, []);
+
+  // Poll unread notifications count every 30s
+  useEffect(() => {
+    if (!user || !token) return;
+    const fetchCount = async () => {
+      try {
+        const count = await getUnreadCount(token);
+        setUnreadCount(count);
+      } catch {}
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, [user, token]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifs(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleOpenNotifs = async () => {
+    if (!token) return;
+    setShowNotifs((v) => !v);
+    if (!showNotifs) {
+      try {
+        const notifs = await getNotifications(token, 10);
+        setNotifications(notifs);
+        if (unreadCount > 0) {
+          await markAllNotificationsRead(token);
+          setUnreadCount(0);
+        }
+      } catch {}
+    }
+  };
 
   const toggleTheme = () => {
     if (isDark) {
@@ -51,8 +104,9 @@ export const Header: React.FC = () => {
     { href: "/", label: "Bài viết", icon: BookOpen },
     { href: "/series", label: "Khóa học / Series", icon: GraduationCap, badge: "Outline" },
     { href: "/categories", label: "Chủ đề", icon: Compass },
-    // Tạm thời ẩn AI RAG và Tiện ích theo yêu cầu của bạn (vẫn giữ code sẵn sàng bật lại khi cần)
   ];
+
+  const isAdmin = user?.role === "admin" || user?.is_admin;
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 dark:bg-stone-900/80 border-b border-stone-200 dark:border-stone-800 transition-colors">
@@ -67,7 +121,7 @@ export const Header: React.FC = () => {
               HungPH<span className="text-blue-600">.</span>
             </span>
             <span className="text-[11px] text-stone-500 dark:text-stone-400 font-medium -mt-1">
-              Tech & Thoughts
+              Tech &amp; Thoughts
             </span>
           </div>
         </Link>
@@ -110,6 +164,68 @@ export const Header: React.FC = () => {
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
+          {/* Notification Bell */}
+          {user && (
+            <div ref={notifRef} className="relative">
+              <button
+                onClick={handleOpenNotifs}
+                aria-label="Thông báo"
+                className="relative p-2 rounded-lg text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Dropdown */}
+              {showNotifs && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-2xl shadow-xl shadow-black/10 overflow-hidden z-50">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 dark:border-stone-800">
+                    <span className="font-semibold text-stone-900 dark:text-white text-sm">Thông báo</span>
+                    <Link
+                      href="/notifications"
+                      className="text-xs text-blue-600 hover:underline"
+                      onClick={() => setShowNotifs(false)}
+                    >
+                      Xem tất cả
+                    </Link>
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-stone-400 text-sm">
+                      Chưa có thông báo nào
+                    </div>
+                  ) : (
+                    <ul className="max-h-72 overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800">
+                      {notifications.map((n) => (
+                        <li
+                          key={n.id}
+                          className={`px-4 py-3 flex items-start gap-3 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors cursor-default ${
+                            !n.is_read ? "bg-blue-50/50 dark:bg-blue-950/20" : ""
+                          }`}
+                        >
+                          <span className="text-xl mt-0.5 shrink-0">{NOTIF_ICONS[n.type] || "🔔"}</span>
+                          <div className="min-w-0">
+                            <p className="text-sm text-stone-800 dark:text-stone-200 leading-snug">
+                              {n.message}
+                            </p>
+                            <p className="text-[11px] text-stone-400 mt-0.5">
+                              {new Date(n.created_at).toLocaleDateString("vi-VN", {
+                                day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+                              })}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* User Authentication & Role Actions */}
           {user ? (
             <div className="flex items-center gap-2">
@@ -122,7 +238,11 @@ export const Header: React.FC = () => {
               </Link>
 
               {/* Profile & Role Badge */}
-              <div className="flex items-center gap-2 bg-stone-100 dark:bg-stone-800/80 pl-2 pr-3 py-1 rounded-full text-xs">
+              <Link
+                href={`/profile/${user.username}`}
+                title="Xem trang cá nhân"
+                className="flex items-center gap-2 bg-stone-100 dark:bg-stone-800/80 pl-2 pr-3 py-1 rounded-full text-xs hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors"
+              >
                 {user.avatar_url ? (
                   <img src={user.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
                 ) : (
@@ -134,7 +254,7 @@ export const Header: React.FC = () => {
                   {user.full_name || user.username}
                 </span>
 
-                {(user.role === "admin" || user.is_admin) ? (
+                {isAdmin ? (
                   <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                     Admin
                   </span>
@@ -143,23 +263,31 @@ export const Header: React.FC = () => {
                     Thành viên
                   </span>
                 )}
-              </div>
+              </Link>
 
-              {/* Navigation to Dashboard */}
               <Link
                 href="/admin/posts"
                 className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
               >
-                {(user.role === "admin" || user.is_admin) ? "Quản trị" : "Bài của tôi"}
+                {isAdmin ? "Quản trị" : "Bài của tôi"}
               </Link>
 
-              {(user.role === "admin" || user.is_admin) && (
-                <Link
-                  href="/admin/users"
-                  className="hidden md:inline-flex text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800/80 bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition-colors"
-                >
-                  Thành viên
-                </Link>
+              {isAdmin && (
+                <>
+                  <Link
+                    href="/admin/users"
+                    className="hidden md:inline-flex text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800/80 bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition-colors"
+                  >
+                    Thành viên
+                  </Link>
+                  <Link
+                    href="/admin/reports"
+                    title="Tố cáo"
+                    className="hidden md:inline-flex p-1.5 rounded-lg text-stone-400 hover:text-rose-600 transition-colors"
+                  >
+                    <Flag className="w-4 h-4" />
+                  </Link>
+                </>
               )}
 
               <button
@@ -178,3 +306,4 @@ export const Header: React.FC = () => {
     </header>
   );
 };
+

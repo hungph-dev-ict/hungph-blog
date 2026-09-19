@@ -11,7 +11,8 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.modules.auth.deps import get_current_admin, get_current_user, get_optional_user
 from app.modules.auth.models import User
-from app.modules.blog.models import Category, Chapter, Comment, Post, Series, Tag, post_tags
+from app.modules.blog.models import Category, Chapter, Comment, Post, PostLike, PostReport, Series, SeriesCollaborator, Tag, post_tags
+from app.modules.social.models import Follow, Notification
 from app.modules.blog.schemas import (
     CategoryCreate,
     CategoryResponse,
@@ -284,6 +285,76 @@ async def get_post_by_id(
     return PostDetail.model_validate(post)
 
 
+async def check_series_write_permission(db: AsyncSession, series_id: str, user: User):
+    """Kiểm tra quyền gán bài viết vào khoá học: chỉ admin, tác giả sở hữu hoặc cộng tác viên được chấp nhận."""
+    is_admin = user.is_admin or getattr(user, "role", "") == "admin"
+    if is_admin:
+        return
+    stmt = select(Series).where(Series.id == series_id)
+    series = (await db.execute(stmt)).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Khoá học không tồn tại")
+    if series.owner_id == user.id:
+        return
+    collab = (await db.execute(
+        select(SeriesCollaborator).where(
+            SeriesCollaborator.series_id == series_id,
+            SeriesCollaborator.user_id == user.id,
+            SeriesCollaborator.status == "accepted"
+        )
+    )).scalar_one_or_none()
+    if not collab:
+        raise HTTPException(
+            status_code=403,
+            detail="Bạn không có quyền thêm bài viết vào khoá học của người khác. Vui lòng gửi yêu cầu cộng tác trước!"
+        )
+
+
+async def check_series_edit_permission(db: AsyncSession, series_id: str, user: User) -> Series:
+    """Kiểm tra quyền chỉnh sửa cấu trúc khoá học: admin, tác giả sở hữu hoặc cộng tác viên."""
+    stmt = select(Series).where(Series.id == series_id).options(selectinload(Series.chapters), selectinload(Series.category))
+    res = await db.execute(stmt)
+    series = res.scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Khoá học không tồn tại")
+    is_admin = user.is_admin or getattr(user, "role", "") == "admin"
+    if is_admin or series.owner_id == user.id:
+        return series
+    collab = (await db.execute(
+        select(SeriesCollaborator).where(
+            SeriesCollaborator.series_id == series_id,
+            SeriesCollaborator.user_id == user.id,
+            SeriesCollaborator.status == "accepted"
+        )
+    )).scalar_one_or_none()
+    if not collab:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền chỉnh sửa khoá học này")
+    return series
+
+
+async def notify_followers_new_post(db: AsyncSession, post: Post, author: User):
+    """Gửi thông báo bài viết mới tới những người đang theo dõi tác giả."""
+    try:
+        followers_stmt = select(Follow.follower_id).where(Follow.following_id == author.id)
+        result = await db.execute(followers_stmt)
+        follower_ids = [r[0] for r in result.fetchall()]
+        if not follower_ids:
+            return
+        author_name = author.full_name or author.username
+        for fid in follower_ids:
+            db.add(Notification(
+                user_id=fid,
+                actor_id=author.id,
+                type="new_post",
+                target_id=post.id,
+                target_type="post",
+                message=f"{author_name} vừa đăng bài viết mới: '{post.title}'"
+            ))
+        await db.commit()
+    except Exception as e:
+        print(f"Error notifying followers: {e}")
+
+
 # --- POSTS CRUD (Member: Own posts | Admin: All posts) ---
 
 @router.post("/posts", response_model=PostDetail, status_code=status.HTTP_201_CREATED)
@@ -292,6 +363,9 @@ async def create_post(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    if post_in.series_id:
+        await check_series_write_permission(db, post_in.series_id, current_user)
+
     slug = await make_unique_slug(db, post_in.slug or post_in.title, model_cls=Post)
     reading_time = calculate_reading_time(post_in.content_html or post_in.content_markdown or "")
     tags = await get_or_create_tags(db, post_in.tags) if post_in.tags else []
@@ -319,6 +393,9 @@ async def create_post(
     db.add(new_post)
     await db.commit()
     await db.refresh(new_post)
+
+    if new_post.is_published:
+        await notify_followers_new_post(db, new_post, current_user)
 
     stmt = (
         select(Post)
@@ -364,6 +441,11 @@ async def update_post(
     if not is_admin and post.author_id != current_user.id:
         raise HTTPException(status_code=403, detail="Bạn chỉ có quyền chỉnh sửa bài viết của chính mình")
 
+    if post_in.series_id is not None and post_in.series_id != "" and post_in.series_id != post.series_id:
+        await check_series_write_permission(db, post_in.series_id, current_user)
+
+    was_published = post.is_published
+
     if post_in.title is not None:
         post.title = post_in.title.strip()
     if post_in.slug is not None:
@@ -396,6 +478,10 @@ async def update_post(
 
     await db.commit()
     await db.refresh(post)
+
+    if post.is_published and not was_published:
+        await notify_followers_new_post(db, post, current_user)
+
     return PostDetail.model_validate(post)
 
 
@@ -618,6 +704,7 @@ async def create_series(
         summary=series_in.summary,
         cover_image=series_in.cover_image,
         is_published=series_in.is_published,
+        owner_id=admin.id,
         category_id=series_in.category_id if series_in.category_id != "" else None
     )
     db.add(new_series)
@@ -643,13 +730,9 @@ async def update_series(
     series_id: str,
     series_in: SeriesUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_user)
 ):
-    stmt = select(Series).where(Series.id == series_id).options(selectinload(Series.chapters), selectinload(Series.category))
-    res = await db.execute(stmt)
-    s = res.scalar_one_or_none()
-    if not s:
-        raise HTTPException(status_code=404, detail="Series not found")
+    s = await check_series_edit_permission(db, series_id, current_user)
 
     if series_in.title:
         s.title = series_in.title.strip()
@@ -685,13 +768,18 @@ async def update_series(
 async def delete_series(
     series_id: str,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_user)
 ):
     stmt = select(Series).where(Series.id == series_id)
     res = await db.execute(stmt)
     s = res.scalar_one_or_none()
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
+    
+    is_admin = current_user.is_admin or getattr(current_user, "role", "") == "admin"
+    if not is_admin and s.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Chỉ tác giả sở hữu hoặc Admin mới có quyền xóa khoá học này")
+
     await db.delete(s)
     await db.commit()
     return None
@@ -704,12 +792,9 @@ async def add_chapter_to_series(
     series_id: str,
     chapter_in: ChapterCreate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_user)
 ):
-    stmt = select(Series).where(Series.id == series_id)
-    res = await db.execute(stmt)
-    if not res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Series not found")
+    await check_series_edit_permission(db, series_id, current_user)
 
     ch = Chapter(
         series_id=series_id,
@@ -728,13 +813,15 @@ async def update_chapter(
     chapter_id: str,
     ch_in: ChapterUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_user)
 ):
     stmt = select(Chapter).where(Chapter.id == chapter_id)
     res = await db.execute(stmt)
     ch = res.scalar_one_or_none()
     if not ch:
         raise HTTPException(status_code=404, detail="Chapter not found")
+
+    await check_series_edit_permission(db, ch.series_id, current_user)
 
     if ch_in.title:
         ch.title = ch_in.title.strip()
@@ -752,13 +839,16 @@ async def update_chapter(
 async def delete_chapter(
     chapter_id: str,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_user)
 ):
     stmt = select(Chapter).where(Chapter.id == chapter_id)
     res = await db.execute(stmt)
     ch = res.scalar_one_or_none()
     if not ch:
         raise HTTPException(status_code=404, detail="Chapter not found")
+
+    await check_series_edit_permission(db, ch.series_id, current_user)
+
     await db.delete(ch)
     await db.commit()
     return None
@@ -875,3 +965,387 @@ async def delete_comment(
     await db.commit()
     return None
 
+
+# ══════════════════════════════════════════════════════════════
+# SERIES COLLABORATION
+# ══════════════════════════════════════════════════════════════
+
+from pydantic import BaseModel as PydanticBase
+
+class CollaboratorResponse(PydanticBase):
+    id: str
+    user_id: str
+    username: str
+    full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    status: str
+    message: Optional[str] = None
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+class CollabRequestCreate(PydanticBase):
+    message: Optional[str] = None
+
+class CollabStatusUpdate(PydanticBase):
+    status: str  # accepted | rejected
+
+
+@router.post("/series/{series_id}/request-collaboration", status_code=201)
+async def request_collaboration(
+    series_id: str,
+    body: CollabRequestCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Người dùng gửi yêu cầu cộng tác vào khoá học."""
+    stmt = select(Series).where(Series.id == series_id)
+    res = await db.execute(stmt)
+    series = res.scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Khoá học không tồn tại")
+
+    if series.owner_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Bạn đã là chủ khoá học này")
+
+    # Check existing request
+    existing_stmt = select(SeriesCollaborator).where(
+        SeriesCollaborator.series_id == series_id,
+        SeriesCollaborator.user_id == current_user.id
+    )
+    existing = (await db.execute(existing_stmt)).scalar_one_or_none()
+    if existing:
+        if existing.status == "pending":
+            raise HTTPException(status_code=400, detail="Bạn đã gửi yêu cầu cộng tác trước đó")
+        if existing.status == "accepted":
+            raise HTTPException(status_code=400, detail="Bạn đã là cộng tác viên")
+        # rejected - allow reapply
+        existing.status = "pending"
+        existing.message = body.message
+    else:
+        collab = SeriesCollaborator(
+            series_id=series_id,
+            user_id=current_user.id,
+            status="pending",
+            message=body.message,
+        )
+        db.add(collab)
+
+    await db.commit()
+
+    # Notify series owner
+    if series.owner_id:
+        actor_name = current_user.full_name or current_user.username
+        notif = Notification(
+            user_id=series.owner_id,
+            actor_id=current_user.id,
+            type="collab_request",
+            target_id=series_id,
+            target_type="series",
+            message=f"{actor_name} muốn cộng tác khoá học '{series.title}'",
+        )
+        db.add(notif)
+        await db.commit()
+
+    return {"ok": True, "message": "Yêu cầu đã được gửi"}
+
+
+@router.get("/series/{series_id}/collaborators", response_model=List[CollaboratorResponse])
+async def get_collaborators(
+    series_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy danh sách cộng tác viên (chỉ owner hoặc admin)."""
+    stmt = select(Series).where(Series.id == series_id)
+    series = (await db.execute(stmt)).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Khoá học không tồn tại")
+
+    is_owner = series.owner_id == current_user.id
+    if not current_user.is_admin and not is_owner:
+        raise HTTPException(status_code=403, detail="Chỉ chủ khoá học mới xem được")
+
+    collabs_stmt = select(SeriesCollaborator).where(SeriesCollaborator.series_id == series_id)
+    collabs = (await db.execute(collabs_stmt)).scalars().all()
+
+    result = []
+    for c in collabs:
+        user = await db.get(User, c.user_id)
+        if user:
+            result.append(CollaboratorResponse(
+                id=c.id,
+                user_id=c.user_id,
+                username=user.username,
+                full_name=user.full_name,
+                avatar_url=user.avatar_url,
+                status=c.status,
+                message=c.message,
+                created_at=c.created_at,
+            ))
+    return result
+
+
+@router.put("/series/{series_id}/collaborators/{user_id}")
+async def update_collaborator(
+    series_id: str,
+    user_id: str,
+    body: CollabStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Chấp nhận / Từ chối yêu cầu cộng tác."""
+    if body.status not in ("accepted", "rejected"):
+        raise HTTPException(status_code=400, detail="Status phải là accepted hoặc rejected")
+
+    series = (await db.execute(select(Series).where(Series.id == series_id))).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Khoá học không tồn tại")
+
+    is_owner = series.owner_id == current_user.id
+    if not current_user.is_admin and not is_owner:
+        raise HTTPException(status_code=403, detail="Chỉ chủ khoá học mới thực hiện được")
+
+    collab = (await db.execute(
+        select(SeriesCollaborator).where(
+            SeriesCollaborator.series_id == series_id,
+            SeriesCollaborator.user_id == user_id
+        )
+    )).scalar_one_or_none()
+    if not collab:
+        raise HTTPException(status_code=404, detail="Không tìm thấy yêu cầu")
+
+    collab.status = body.status
+    await db.commit()
+
+    # Notify the requester
+    notif_type = "collab_accepted" if body.status == "accepted" else "collab_rejected"
+    msg = (
+        f"Yêu cầu cộng tác khoá học '{series.title}' đã được chấp nhận!"
+        if body.status == "accepted"
+        else f"Yêu cầu cộng tác khoá học '{series.title}' bị từ chối."
+    )
+    notif = Notification(
+        user_id=user_id,
+        actor_id=current_user.id,
+        type=notif_type,
+        target_id=series_id,
+        target_type="series",
+        message=msg,
+    )
+    db.add(notif)
+    await db.commit()
+
+    return {"ok": True, "status": body.status}
+
+
+@router.delete("/series/{series_id}/collaborators/{user_id}", status_code=204)
+async def remove_collaborator(
+    series_id: str,
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    series = (await db.execute(select(Series).where(Series.id == series_id))).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404)
+    is_owner = series.owner_id == current_user.id
+    if not current_user.is_admin and not is_owner:
+        raise HTTPException(status_code=403)
+    collab = (await db.execute(
+        select(SeriesCollaborator).where(
+            SeriesCollaborator.series_id == series_id,
+            SeriesCollaborator.user_id == user_id
+        )
+    )).scalar_one_or_none()
+    if collab:
+        await db.delete(collab)
+        await db.commit()
+    return None
+
+
+# ══════════════════════════════════════════════════════════════
+# POST LIKES
+# ══════════════════════════════════════════════════════════════
+
+class LikeStatusResponse(PydanticBase):
+    liked: bool
+    likes_count: int
+
+
+@router.post("/posts/{post_id}/like", response_model=LikeStatusResponse)
+async def toggle_like(
+    post_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    post = (await db.execute(select(Post).where(Post.id == post_id))).scalar_one_or_none()
+    if not post:
+        raise HTTPException(status_code=404, detail="Bài viết không tồn tại")
+
+    existing = (await db.execute(
+        select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == current_user.id)
+    )).scalar_one_or_none()
+
+    if existing:
+        await db.delete(existing)
+        liked = False
+    else:
+        db.add(PostLike(post_id=post_id, user_id=current_user.id))
+        liked = True
+
+    await db.commit()
+    likes_count = (await db.execute(
+        select(func.count()).where(PostLike.post_id == post_id)
+    )).scalar() or 0
+    return LikeStatusResponse(liked=liked, likes_count=likes_count)
+
+
+@router.get("/posts/{post_id}/like-status", response_model=LikeStatusResponse)
+async def get_like_status(
+    post_id: str,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    liked = False
+    if current_user:
+        liked = (await db.execute(
+            select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == current_user.id)
+        )).scalar_one_or_none() is not None
+
+    likes_count = (await db.execute(
+        select(func.count()).where(PostLike.post_id == post_id)
+    )).scalar() or 0
+    return LikeStatusResponse(liked=liked, likes_count=likes_count)
+
+
+# ══════════════════════════════════════════════════════════════
+# POST REPORTS
+# ══════════════════════════════════════════════════════════════
+
+VALID_REASONS = {"spam", "inappropriate", "misinformation", "copyright", "other"}
+
+class PostReportCreate(PydanticBase):
+    reason: str
+    description: Optional[str] = None
+
+class PostReportResponse(PydanticBase):
+    id: str
+    post_id: str
+    post_title: Optional[str] = None
+    reporter_id: Optional[str] = None
+    reporter_username: Optional[str] = None
+    reason: str
+    description: Optional[str] = None
+    status: str
+    admin_note: Optional[str] = None
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+class PostReportUpdate(PydanticBase):
+    status: str
+    admin_note: Optional[str] = None
+
+
+@router.post("/posts/{post_id}/report", status_code=201)
+async def report_post(
+    post_id: str,
+    body: PostReportCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if body.reason not in VALID_REASONS:
+        raise HTTPException(status_code=400, detail=f"Lý do không hợp lệ. Chọn: {', '.join(VALID_REASONS)}")
+
+    post = (await db.execute(select(Post).where(Post.id == post_id))).scalar_one_or_none()
+    if not post:
+        raise HTTPException(status_code=404, detail="Bài viết không tồn tại")
+
+    # Prevent duplicate pending report from same user
+    existing = (await db.execute(
+        select(PostReport).where(
+            PostReport.post_id == post_id,
+            PostReport.reporter_id == current_user.id,
+            PostReport.status == "pending"
+        )
+    )).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=400, detail="Bạn đã tố cáo bài viết này rồi")
+
+    report = PostReport(
+        post_id=post_id,
+        reporter_id=current_user.id,
+        reason=body.reason,
+        description=body.description,
+        status="pending",
+    )
+    db.add(report)
+    await db.commit()
+    return {"ok": True, "message": "Tố cáo đã được gửi. Chúng tôi sẽ xật lý sớm nhất có thể."}
+
+
+@router.get("/admin/reports", response_model=List[PostReportResponse])
+async def list_reports(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    limit: int = 50,
+    offset: int = 0,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(PostReport)
+    if status_filter:
+        stmt = stmt.where(PostReport.status == status_filter)
+    stmt = stmt.order_by(PostReport.created_at.desc()).limit(limit).offset(offset)
+    reports = (await db.execute(stmt)).scalars().all()
+
+    result = []
+    for r in reports:
+        post = await db.get(Post, r.post_id)
+        reporter = await db.get(User, r.reporter_id) if r.reporter_id else None
+        result.append(PostReportResponse(
+            id=r.id,
+            post_id=r.post_id,
+            post_title=post.title if post else None,
+            reporter_id=r.reporter_id,
+            reporter_username=reporter.username if reporter else None,
+            reason=r.reason,
+            description=r.description,
+            status=r.status,
+            admin_note=r.admin_note,
+            created_at=r.created_at,
+        ))
+    return result
+
+
+@router.put("/admin/reports/{report_id}", response_model=PostReportResponse)
+async def update_report(
+    report_id: str,
+    body: PostReportUpdate,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    valid_statuses = {"pending", "reviewed", "dismissed", "action_taken"}
+    if body.status not in valid_statuses:
+        raise HTTPException(status_code=400, detail="Status không hợp lệ")
+
+    report = await db.get(PostReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Không tìm thấy báo cáo")
+
+    report.status = body.status
+    report.admin_note = body.admin_note
+    await db.commit()
+
+    post = await db.get(Post, report.post_id)
+    reporter = await db.get(User, report.reporter_id) if report.reporter_id else None
+    return PostReportResponse(
+        id=report.id,
+        post_id=report.post_id,
+        post_title=post.title if post else None,
+        reporter_id=report.reporter_id,
+        reporter_username=reporter.username if reporter else None,
+        reason=report.reason,
+        description=report.description,
+        status=report.status,
+        admin_note=report.admin_note,
+        created_at=report.created_at,
+    )

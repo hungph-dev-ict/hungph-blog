@@ -1,14 +1,43 @@
-import React from "react";
+"use client";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Clock, Calendar, ArrowRight, Eye } from "lucide-react";
+import { Clock, Calendar, ArrowRight, Eye, Heart } from "lucide-react";
 import { PostListItem } from "@/lib/types";
-import { getFullImageUrl } from "@/lib/api";
+import { getFullImageUrl, getLikeStatus, toggleLike } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 interface PostCardProps {
   post: PostListItem;
 }
 
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
+  const { user, token } = useAuth();
+  const [liked, setLiked] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
+  const [likeLoading, setLikeLoading] = useState(false);
+
+  useEffect(() => {
+    getLikeStatus(post.id, token || undefined).then((s) => {
+      setLiked(s.liked);
+      setLikesCount(s.likes_count);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id, token]);
+
+  const handleLike = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!user || !token) { alert("Vui lòng đăng nhập để thả tim"); return; }
+    if (likeLoading) return;
+    setLikeLoading(true);
+    try {
+      const result = await toggleLike(post.id, token);
+      setLiked(result.liked);
+      setLikesCount(result.likes_count);
+    } finally {
+      setLikeLoading(false);
+    }
+  };
+
   const formattedDate = post.published_at
     ? new Date(post.published_at).toLocaleDateString("vi-VN", {
         year: "numeric",
@@ -88,13 +117,33 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             ))}
           </div>
 
-          <Link
-            href={`/posts/${post.slug}`}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform"
-          >
-            <span>Đọc tiếp</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+          <div className="flex items-center gap-3">
+            {/* Like Button */}
+            <button
+              onClick={handleLike}
+              title={liked ? "Bỏ thích" : "Thích"}
+              className={`flex items-center gap-1 text-xs font-medium transition-all ${
+                liked
+                  ? "text-rose-500"
+                  : "text-stone-400 hover:text-rose-500"
+              }`}
+            >
+              <Heart
+                className={`w-4 h-4 transition-transform ${
+                  liked ? "fill-rose-500 scale-110" : ""
+                }`}
+              />
+              {likesCount > 0 && <span>{likesCount}</span>}
+            </button>
+
+            <Link
+              href={`/posts/${post.slug}`}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform"
+            >
+              <span>Đọc tiếp</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
       </div>
     </article>

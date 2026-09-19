@@ -40,6 +40,7 @@ export interface AuthorBrief {
   id: string;
   username: string;
   full_name?: string;
+  avatar_url?: string;
 }
 
 export interface LessonBrief {
@@ -125,3 +126,74 @@ export interface UploadResponse {
   url: string;
   filename: string;
 }
+
+// ── Social Features ───────────────────────────────────────────
+
+export interface UserBrief {
+  id: string;
+  username: string;
+  full_name?: string;
+  avatar_url?: string;
+}
+
+export interface UserProfile extends UserBrief {
+  created_at: string;
+  followers_count: number;
+  following_count: number;
+}
+
+export interface FollowStatus {
+  is_following: boolean;
+  followers_count: number;
+  following_count: number;
+}
+
+export interface Notification {
+  id: string;
+  type: "collab_request" | "collab_accepted" | "collab_rejected" | "new_follower" | "new_post";
+  actor_id?: string;
+  actor?: UserBrief;
+  target_id?: string;
+  target_type?: "series" | "post";
+  message?: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface LikeStatus {
+  liked: boolean;
+  likes_count: number;
+}
+
+export interface Collaborator {
+  id: string;
+  user_id: string;
+  username: string;
+  full_name?: string;
+  avatar_url?: string;
+  status: "pending" | "accepted" | "rejected";
+  message?: string;
+  created_at: string;
+}
+
+export interface PostReport {
+  id: string;
+  post_id: string;
+  post_title?: string;
+  reporter_id?: string;
+  reporter_username?: string;
+  reason: string;
+  description?: string;
+  status: "pending" | "reviewed" | "dismissed" | "action_taken";
+  admin_note?: string;
+  created_at: string;
+}
+
+export const REPORT_REASONS: Record<string, string> = {
+  spam: "Spam / Quảng cáo",
+  inappropriate: "Nội dung không phù hợp",
+  misinformation: "Thông tin sai lệch",
+  copyright: "Vi phạm bản quyền",
+  other: "Lý do khác",
+};
+
