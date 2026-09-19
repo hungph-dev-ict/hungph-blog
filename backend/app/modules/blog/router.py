@@ -624,15 +624,6 @@ async def create_series(
     await db.commit()
     await db.refresh(new_series)
 
-    # Thêm sẵn 1 chương khởi đầu
-    initial_chapter = Chapter(
-        series_id=new_series.id,
-        title="Chương 1: Khởi Động & Tổng Quan",
-        order=1
-    )
-    db.add(initial_chapter)
-    await db.commit()
-
     return SeriesResponse(
         id=new_series.id,
         title=new_series.title,
@@ -642,7 +633,7 @@ async def create_series(
         is_published=new_series.is_published,
         category_id=new_series.category_id,
         created_at=new_series.created_at,
-        total_chapters=1,
+        total_chapters=0,
         total_lessons=0
     )
 

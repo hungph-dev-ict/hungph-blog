@@ -21,6 +21,7 @@ import {
   deleteCategory,
 } from "@/lib/api";
 import { Category } from "@/lib/types";
+import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 
 export default function AdminCategoriesPage() {
   const router = useRouter();
@@ -117,7 +118,14 @@ export default function AdminCategoriesPage() {
   }
 
   return (
-    <div className="w-full space-y-8 pb-16">
+    <div className="w-full space-y-6 pb-16">
+      <Breadcrumbs
+        items={[
+          { label: "Quản trị", href: "/admin/posts" },
+          { label: "Danh mục bài viết" },
+        ]}
+      />
+
       {/* Top Bar */}
       <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-4">
         <div className="flex items-center gap-3">

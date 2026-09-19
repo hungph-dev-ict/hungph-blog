@@ -14,6 +14,8 @@ import {
 import { getFullImageUrl } from "@/lib/api";
 import { SeriesDetail } from "@/lib/types";
 
+import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+
 interface SeriesDetailClientProps {
   initialSeries: SeriesDetail;
 }
@@ -30,7 +32,14 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
       : null;
 
   return (
-    <div className="w-full space-y-12 pb-20">
+    <div className="w-full space-y-6 pb-20">
+      <Breadcrumbs
+        items={[
+          { label: "Khóa học & Series", href: "/series" },
+          { label: series.title },
+        ]}
+      />
+
       {/* Back button */}
       <div>
         <button
@@ -89,8 +98,13 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                 className="w-full max-w-[280px] h-48 object-cover rounded-2xl shadow-md border border-stone-200 dark:border-stone-800"
               />
             ) : (
-              <div className="w-44 h-44 rounded-3xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-xl">
-                <GraduationCap className="w-20 h-20 opacity-80" />
+              <div className="w-full max-w-[280px] h-48 rounded-2xl bg-gradient-to-tr from-blue-700 via-indigo-600 to-sky-500 flex flex-col items-center justify-center text-white shadow-xl p-6 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center mb-2 shadow-inner">
+                  <GraduationCap className="w-8 h-8 text-white" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-100">
+                  Lộ Trình Khóa Học
+                </span>
               </div>
             )}
           </div>

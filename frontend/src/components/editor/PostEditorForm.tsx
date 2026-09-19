@@ -29,6 +29,7 @@ import {
 } from "@/lib/api";
 import { Category, Chapter, PostDetail, Series } from "@/lib/types";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
+import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 
 interface PostEditorFormProps {
   postId?: string;
@@ -237,7 +238,14 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   }
 
   return (
-    <div className="w-full space-y-6 pb-20">
+    <div className="w-full space-y-4 pb-20">
+      <Breadcrumbs
+        items={[
+          { label: "Quản trị", href: "/admin/posts" },
+          { label: postId ? "Chỉnh sửa bài viết" : "Tạo bài viết mới" },
+        ]}
+      />
+
       {/* Top action bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4 sticky top-16 z-30 bg-stone-50/90 dark:bg-stone-950/90 backdrop-blur-md pt-2">
         <div className="flex items-center gap-3">

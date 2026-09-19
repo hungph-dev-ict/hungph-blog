@@ -6,10 +6,12 @@ import { Folder, Hash, ArrowRight } from "lucide-react";
 import { fetchCategories, fetchTags } from "@/lib/api";
 import { Category, Tag } from "@/lib/types";
 
+import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([fetchCategories(), fetchTags()])
@@ -21,7 +23,9 @@ export default function CategoriesPage() {
   }, []);
 
   return (
-    <div className="w-full space-y-12 pb-16">
+    <div className="w-full space-y-8 pb-16">
+      <Breadcrumbs items={[{ label: "Chủ Đề & Thẻ Bài Viết" }]} />
+
       <div className="space-y-3">
         <h1 className="text-3xl sm:text-4xl font-extrabold text-stone-900 dark:text-white">
           Chủ Đề & Thẻ Bài Viết

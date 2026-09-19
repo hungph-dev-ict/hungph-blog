@@ -17,6 +17,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { fetchPosts, deletePost } from "@/lib/api";
 import { PostListItem } from "@/lib/types";
+import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 
 export default function AdminPostsPage() {
   const router = useRouter();
@@ -77,7 +78,14 @@ export default function AdminPostsPage() {
   const displayedPosts = isAdmin ? posts : posts.filter((p) => p.author?.id === user.id);
 
   return (
-    <div className="w-full space-y-8 pb-16">
+    <div className="w-full space-y-6 pb-16">
+      <Breadcrumbs
+        items={[
+          { label: "Quản trị", href: "/admin/posts" },
+          { label: isAdmin ? "Quản lý bài viết" : "Bài viết của tôi" },
+        ]}
+      />
+
       {/* Top Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-6">
         <div>

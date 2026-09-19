@@ -23,6 +23,8 @@ import { TableOfContents } from "@/components/blog/TableOfContents";
 import { ReadingProgressBar } from "@/components/blog/ReadingProgressBar";
 import { CommentSection } from "@/components/blog/CommentSection";
 
+import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+
 interface PostDetailClientProps {
   initialPost: PostDetail;
 }
@@ -52,6 +54,21 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
       <ReadingProgressBar />
 
       <div className="w-full pb-16">
+        {/* Breadcrumbs Navigation */}
+        <Breadcrumbs
+          items={[
+            ...(post.series_outline
+              ? [
+                  { label: "Khóa học", href: "/series" },
+                  { label: post.series_outline.title, href: `/series/${post.series_outline.slug}` },
+                ]
+              : post.category
+              ? [{ label: post.category.name, href: `/?category=${post.category.slug}` }]
+              : []),
+            { label: post.title },
+          ]}
+        />
+
         {/* Navigation / Course Breadcrumb */}
         <div className="mb-6 flex items-center justify-between">
           <button

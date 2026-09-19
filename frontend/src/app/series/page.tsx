@@ -5,6 +5,7 @@ import Link from "next/link";
 import { GraduationCap, BookOpen, Layers, ArrowRight, Clock } from "lucide-react";
 import { fetchSeries, getFullImageUrl } from "@/lib/api";
 import { Series } from "@/lib/types";
+import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 
 export default function SeriesListPage() {
   const [seriesList, setSeriesList] = useState<Series[]>([]);
@@ -18,7 +19,9 @@ export default function SeriesListPage() {
   }, []);
 
   return (
-    <div className="w-full space-y-12 pb-16">
+    <div className="w-full space-y-8 pb-16">
+      <Breadcrumbs items={[{ label: "Khóa học & Series" }]} />
+
       {/* Header */}
       <div className="space-y-4 max-w-3xl">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
@@ -53,27 +56,39 @@ export default function SeriesListPage() {
               key={series.id}
               className="group relative flex flex-col rounded-3xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900/60 overflow-hidden shadow-sm hover:shadow-xl hover:border-blue-500/50 transition-all duration-300"
             >
-              {/* Cover Image */}
-              {series.cover_image && (
-                <Link href={`/series/${series.slug}`} className="h-52 overflow-hidden block relative bg-stone-100 dark:bg-stone-800">
+              {/* Cover Image or Styled Default Fallback */}
+              <Link
+                href={`/series/${series.slug}`}
+                className="h-52 overflow-hidden block relative bg-gradient-to-tr from-blue-700 via-indigo-600 to-sky-500"
+              >
+                {series.cover_image ? (
                   <img
                     src={getFullImageUrl(series.cover_image)}
                     alt={series.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                  <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white text-xs font-semibold">
-                    <span className="px-2.5 py-1 rounded-full bg-blue-600/90 backdrop-blur-md">
-                      {series.total_chapters} chương • {series.total_lessons} bài học
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-white/90 p-6 text-center select-none">
+                    <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center mb-2 shadow-inner">
+                      <GraduationCap className="w-8 h-8 text-white" />
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-blue-100">
+                      Khóa học / Tuyển tập
                     </span>
-                    {series.category && (
-                      <span className="px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md">
-                        {series.category.name}
-                      </span>
-                    )}
                   </div>
-                </Link>
-              )}
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white text-xs font-semibold">
+                  <span className="px-2.5 py-1 rounded-full bg-blue-600/90 backdrop-blur-md">
+                    {series.total_chapters} chương • {series.total_lessons} bài học
+                  </span>
+                  {series.category && (
+                    <span className="px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md">
+                      {series.category.name}
+                    </span>
+                  )}
+                </div>
+              </Link>
 
               {/* Content */}
               <div className="p-6 flex-1 flex flex-col justify-between space-y-4">

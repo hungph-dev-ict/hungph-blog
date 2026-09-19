@@ -18,6 +18,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { fetchUsers, updateUserRole, deleteUser } from "@/lib/api";
 import { User } from "@/lib/types";
+import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 
 export default function AdminUsersPage() {
   const router = useRouter();
@@ -120,7 +121,14 @@ export default function AdminUsersPage() {
   const totalMembers = users.length - totalAdmins;
 
   return (
-    <div className="w-full space-y-8 pb-16">
+    <div className="w-full space-y-6 pb-16">
+      <Breadcrumbs
+        items={[
+          { label: "Quản trị", href: "/admin/posts" },
+          { label: "Quản lý thành viên" },
+        ]}
+      />
+
       {/* Top Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
         <div className="flex items-center gap-3">

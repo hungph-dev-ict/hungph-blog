@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Wrench, Type, Link as LinkIcon, Code2, Copy, Check } from "lucide-react";
 import { analyzeText } from "@/lib/api";
+import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 
 export default function UtilitiesPage() {
   // Text Stats Tool
@@ -21,24 +22,24 @@ export default function UtilitiesPage() {
       return;
     }
     try {
-      const data = await analyzeText(val);
-      setStats(data);
-    } catch (e) {
-      // Local fallback calculation
-      const words = val.trim().split(/\s+/).filter(Boolean);
+      const res = await analyzeText(val);
+      setStats(res);
+    } catch {
+      // fallback local calculation
+      const words = val.trim().split(/\s+/).filter(Boolean).length;
       setStats({
         characters: val.length,
-        words: words.length,
+        words,
         sentences: val.split(/[.!?]+/).filter(Boolean).length,
         paragraphs: val.split(/\n+/).filter(Boolean).length,
-        reading_time_minutes: Math.max(1, Math.ceil(words.length / 200)),
+        reading_time_minutes: Math.ceil(words / 200),
       });
     }
   };
 
   const handleGenerateSlug = (val: string) => {
     setRawTitle(val);
-    const slug = val
+    const generated = val
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -46,7 +47,7 @@ export default function UtilitiesPage() {
       .replace(/[^a-z0-9\s-]/g, "")
       .trim()
       .replace(/\s+/g, "-");
-    setSlugOutput(slug);
+    setSlugOutput(generated);
   };
 
   const copySlug = () => {
@@ -56,7 +57,9 @@ export default function UtilitiesPage() {
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-10 pb-16">
+    <div className="w-full max-w-5xl mx-auto space-y-6 pb-16">
+      <Breadcrumbs items={[{ label: "Tiện Ích Cá Nhân (Utilities)" }]} />
+
       <div className="space-y-3">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
           <Wrench className="w-3.5 h-3.5" />
