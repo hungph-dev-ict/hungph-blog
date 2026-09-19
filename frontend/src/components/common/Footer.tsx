@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Globe, Heart, Code2, Clock } from "lucide-react";
+import { Heart, Clock } from "lucide-react";
 
 export const Footer: React.FC = () => {
   const [times, setTimes] = useState<{ tokyo: string; hanoi: string; dateTokyo: string; dateHanoi: string }>({
@@ -52,26 +52,6 @@ export const Footer: React.FC = () => {
             <p className="text-sm text-stone-500 dark:text-stone-400 leading-relaxed">
               Không gian cá nhân ghi chép về kỹ thuật phần mềm, thiết kế hệ thống, AI, và những suy tư hàng ngày.
             </p>
-            <div className="flex items-center gap-3 text-stone-400">
-              <a
-                href="https://github.com/hungph-dev-ict/hungph-blog"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-stone-900 dark:hover:text-white transition-colors"
-                aria-label="Code Repository"
-              >
-                <Code2 className="w-4 h-4" />
-              </a>
-              <a
-                href="https://hungph.dev"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-blue-500 transition-colors"
-                aria-label="Website"
-              >
-                <Globe className="w-4 h-4" />
-              </a>
-            </div>
           </div>
 
           {/* Col 2 */}
@@ -91,11 +71,6 @@ export const Footer: React.FC = () => {
               <li>
                 <Link href="/categories" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                   Danh mục chủ đề
-                </Link>
-              </li>
-              <li>
-                <Link href="/rag" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                  Trợ lý AI (RAG Assistant)
                 </Link>
               </li>
             </ul>

@@ -28,11 +28,18 @@ class GoogleAuthRequest(BaseModel):
 
 class UserResponse(UserBase):
     id: str
+    role: str = "member"
     is_admin: bool
+    is_active: bool = True
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class UserRoleUpdate(BaseModel):
+    role: str  # "admin" or "member"
+    is_active: Optional[bool] = None
 
 
 class Token(BaseModel):

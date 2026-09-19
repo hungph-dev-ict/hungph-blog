@@ -454,3 +454,41 @@ export async function loginWithGoogle(payload: {
   }
   return res.json();
 }
+
+// --- USER & MEMBER MANAGEMENT ---
+export async function fetchUsers(token: string): Promise<User[]> {
+  const res = await fetch(`${API_BASE_URL}/auth/users`, {
+    headers: getHeaders(token),
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function updateUserRole(
+  userId: string,
+  role: string,
+  isActive: boolean | undefined,
+  token: string
+): Promise<User> {
+  const res = await fetch(`${API_BASE_URL}/auth/users/${userId}/role`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify({ role, is_active: isActive }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Không thể cập nhật quyền thành viên");
+  }
+  return res.json();
+}
+
+export async function deleteUser(userId: string, token: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/auth/users/${userId}`, {
+    method: "DELETE",
+    headers: getHeaders(token),
+  });
+  if (!res.ok) {
+    throw new Error("Không thể xóa thành viên");
+  }
+}

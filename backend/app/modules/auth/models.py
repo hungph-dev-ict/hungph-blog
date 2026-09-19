@@ -14,6 +14,7 @@ class User(Base):
     avatar_url = Column(String(500), nullable=True)
     google_id = Column(String(100), unique=True, index=True, nullable=True)
     hashed_password = Column(String(255), nullable=False)
+    role = Column(String(20), default="member")  # "admin" | "member"
     is_admin = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

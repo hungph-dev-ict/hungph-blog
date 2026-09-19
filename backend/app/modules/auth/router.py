@@ -1,16 +1,18 @@
 import asyncio
 import json
+from typing import List
 import urllib.request
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash, verify_password
-from app.modules.auth.deps import get_current_user
+from app.modules.auth.deps import get_current_admin, get_current_user
 from app.modules.auth.models import User
-from app.modules.auth.schemas import GoogleAuthRequest, Token, UserCreate, UserLogin, UserResponse
+from app.modules.auth.schemas import GoogleAuthRequest, Token, UserCreate, UserLogin, UserResponse, UserRoleUpdate
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -40,7 +42,7 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
 
 @router.post("/google", response_model=Token)
 async def google_login(payload: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
-    """Đăng nhập hoặc đăng ký nhanh bằng Google / Gmail cho độc giả bình luận."""
+    """Đăng nhập hoặc đăng ký bằng Google SSO cho độc giả & quản trị viên."""
     email = None
     name = None
     picture = None
@@ -72,6 +74,7 @@ async def google_login(payload: GoogleAuthRequest, db: AsyncSession = Depends(ge
         raise HTTPException(status_code=400, detail="Không tìm thấy email từ tài khoản Google")
 
     email = email.lower().strip()
+    is_super_admin = (email == settings.ADMIN_EMAIL.lower())
 
     stmt = select(User).where(User.email == email)
     result = await db.execute(stmt)
@@ -96,7 +99,8 @@ async def google_login(payload: GoogleAuthRequest, db: AsyncSession = Depends(ge
             avatar_url=picture,
             google_id=google_id,
             hashed_password=get_password_hash(str(uuid.uuid4())),
-            is_admin=False,
+            role="admin" if is_super_admin else "member",
+            is_admin=is_super_admin,
             is_active=True,
         )
         db.add(user)
@@ -104,6 +108,10 @@ async def google_login(payload: GoogleAuthRequest, db: AsyncSession = Depends(ge
         await db.refresh(user)
     else:
         changed = False
+        if is_super_admin and (user.role != "admin" or not user.is_admin):
+            user.role = "admin"
+            user.is_admin = True
+            changed = True
         if picture and not user.avatar_url:
             user.avatar_url = picture
             changed = True
@@ -142,6 +150,7 @@ async def initial_setup(user_in: UserCreate, db: AsyncSession = Depends(get_db))
         username=user_in.username.strip(),
         full_name=user_in.full_name,
         hashed_password=get_password_hash(user_in.password),
+        role="admin",
         is_admin=True,
         is_active=True
     )
@@ -154,3 +163,66 @@ async def initial_setup(user_in: UserCreate, db: AsyncSession = Depends(get_db))
 @router.get("/me", response_model=UserResponse)
 async def get_my_profile(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+# --- USER & MEMBER MANAGEMENT (Admin Only) ---
+
+@router.get("/users", response_model=List[UserResponse])
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Admin xem danh sách toàn bộ thành viên trong hệ thống."""
+    stmt = select(User).order_by(desc(User.created_at))
+    res = await db.execute(stmt)
+    users = res.scalars().all()
+    return [UserResponse.model_validate(u) for u in users]
+
+
+@router.put("/users/{user_id}/role", response_model=UserResponse)
+async def update_user_role(
+    user_id: str,
+    payload: UserRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Admin cấp hoặc thu hồi quyền quản trị / đổi quyền thành viên."""
+    stmt = select(User).where(User.id == user_id)
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Không tìm thấy thành viên")
+
+    if user.id == admin.id and payload.role != "admin":
+        raise HTTPException(status_code=400, detail="Bạn không thể tự hạ quyền quản trị của chính mình")
+
+    if payload.role not in ["admin", "member"]:
+        raise HTTPException(status_code=400, detail="Role phải là 'admin' hoặc 'member'")
+
+    user.role = payload.role
+    user.is_admin = (payload.role == "admin")
+    if payload.is_active is not None:
+        user.is_active = payload.is_active
+
+    await db.commit()
+    await db.refresh(user)
+    return UserResponse.model_validate(user)
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Admin xóa tài khoản thành viên khỏi hệ thống."""
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="Không thể xóa tài khoản của chính mình")
+    stmt = select(User).where(User.id == user_id)
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Không tìm thấy thành viên")
+    await db.delete(user)
+    await db.commit()
+    return None

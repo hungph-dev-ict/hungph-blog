@@ -259,7 +259,7 @@ async def get_post_by_slug(
 async def get_post_by_id(
     post_id: str,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_user)
 ):
     stmt = (
         select(Post)
@@ -276,16 +276,21 @@ async def get_post_by_id(
     post = res.scalar_one_or_none()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
+
+    is_admin = (current_user.is_admin or getattr(current_user, "role", "") == "admin")
+    if not is_admin and post.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập bài viết này")
+
     return PostDetail.model_validate(post)
 
 
-# --- ADMIN CRUD POSTS ---
+# --- POSTS CRUD (Member: Own posts | Admin: All posts) ---
 
 @router.post("/posts", response_model=PostDetail, status_code=status.HTTP_201_CREATED)
 async def create_post(
     post_in: PostCreate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_user)
 ):
     slug = await make_unique_slug(db, post_in.slug or post_in.title, model_cls=Post)
     reading_time = calculate_reading_time(post_in.content_html or post_in.content_markdown or "")
@@ -304,7 +309,7 @@ async def create_post(
         is_published=post_in.is_published,
         published_at=published_at,
         reading_time_minutes=reading_time,
-        author_id=admin.id,
+        author_id=current_user.id,
         category_id=post_in.category_id if post_in.category_id != "" else None,
         series_id=post_in.series_id if post_in.series_id != "" else None,
         chapter_id=post_in.chapter_id if post_in.chapter_id != "" else None,
@@ -336,7 +341,7 @@ async def update_post(
     post_id: str,
     post_in: PostUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_user)
 ):
     stmt = (
         select(Post)
@@ -354,6 +359,10 @@ async def update_post(
 
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
+
+    is_admin = (current_user.is_admin or getattr(current_user, "role", "") == "admin")
+    if not is_admin and post.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bạn chỉ có quyền chỉnh sửa bài viết của chính mình")
 
     if post_in.title is not None:
         post.title = post_in.title.strip()
@@ -394,13 +403,18 @@ async def update_post(
 async def delete_post(
     post_id: str,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_user)
 ):
     stmt = select(Post).where(Post.id == post_id)
     res = await db.execute(stmt)
     post = res.scalar_one_or_none()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
+
+    is_admin = (current_user.is_admin or getattr(current_user, "role", "") == "admin")
+    if not is_admin and post.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bạn chỉ có quyền xóa bài viết của chính mình")
+
     await db.delete(post)
     await db.commit()
     return None

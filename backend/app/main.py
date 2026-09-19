@@ -26,6 +26,7 @@ async def init_default_data():
             from sqlalchemy import text
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500);"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(100);"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'member';"))
         except Exception as mig_err:
             print(f"Migration note: {mig_err}")
 
@@ -41,11 +42,18 @@ async def init_default_data():
                 username=settings.ADMIN_USERNAME,
                 full_name="Hung Pham Hoang",
                 hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
+                role="admin",
                 is_admin=True,
                 is_active=True
             )
             db.add(admin)
             await db.commit()
+            await db.refresh(admin)
+        else:
+            if admin.role != "admin" or not admin.is_admin:
+                admin.role = "admin"
+                admin.is_admin = True
+                await db.commit()
             await db.refresh(admin)
 
         # Kiểm tra Category mẫu

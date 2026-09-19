@@ -16,6 +16,7 @@ import {
   User as UserIcon,
   LogOut,
 } from "lucide-react";
+import { GoogleLoginButton } from "./GoogleLoginButton";
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
@@ -109,22 +110,58 @@ export const Header: React.FC = () => {
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
-          {/* Admin / Write Post */}
+          {/* User Authentication & Role Actions */}
           {user ? (
             <div className="flex items-center gap-2">
               <Link
                 href="/admin/editor/new"
-                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm shadow-blue-500/25"
+                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm shadow-blue-500/20"
               >
                 <PenTool className="w-3.5 h-3.5" />
                 <span>Viết bài</span>
               </Link>
+
+              {/* Profile & Role Badge */}
+              <div className="flex items-center gap-2 bg-stone-100 dark:bg-stone-800/80 pl-2 pr-3 py-1 rounded-full text-xs">
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-[11px]">
+                    {user.full_name?.charAt(0) || user.username?.charAt(0) || "U"}
+                  </div>
+                )}
+                <span className="font-semibold text-stone-900 dark:text-white max-w-[90px] sm:max-w-[120px] truncate">
+                  {user.full_name || user.username}
+                </span>
+
+                {(user.role === "admin" || user.is_admin) ? (
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    Admin
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300">
+                    Thành viên
+                  </span>
+                )}
+              </div>
+
+              {/* Navigation to Dashboard */}
               <Link
                 href="/admin/posts"
-                className="text-xs font-medium px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
               >
-                Quản trị
+                {(user.role === "admin" || user.is_admin) ? "Quản trị" : "Bài của tôi"}
               </Link>
+
+              {(user.role === "admin" || user.is_admin) && (
+                <Link
+                  href="/admin/users"
+                  className="hidden md:inline-flex text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800/80 bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition-colors"
+                >
+                  Thành viên
+                </Link>
+              )}
+
               <button
                 onClick={logout}
                 title="Đăng xuất"
@@ -134,13 +171,7 @@ export const Header: React.FC = () => {
               </button>
             </div>
           ) : (
-            <Link
-              href="/admin/login"
-              className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-400 transition-colors"
-            >
-              <UserIcon className="w-3.5 h-3.5" />
-              <span>Admin</span>
-            </Link>
+            <GoogleLoginButton buttonText="Đăng nhập" />
           )}
         </div>
       </div>

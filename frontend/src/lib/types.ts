@@ -4,7 +4,9 @@ export interface User {
   username: string;
   full_name?: string;
   avatar_url?: string;
+  role?: string;
   is_admin: boolean;
+  is_active?: boolean;
   created_at: string;
 }
 

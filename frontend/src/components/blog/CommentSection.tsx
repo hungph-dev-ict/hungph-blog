@@ -1,17 +1,18 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { MessageSquare, Send, Reply, Trash2, LogIn, LogOut, CheckCircle2, User as UserIcon } from "lucide-react";
+import { MessageSquare, Send, Reply, Trash2, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { fetchComments, createComment, deleteComment } from "@/lib/api";
 import { Comment } from "@/lib/types";
+import { GoogleLoginButton } from "@/components/common/GoogleLoginButton";
 
 interface CommentSectionProps {
   postId: string;
 }
 
 export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
-  const { user, token, loginGoogle, logout } = useAuth();
+  const { user, token, logout } = useAuth();
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,13 +24,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
   const [submitting, setSubmitting] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState("");
-
-  // Gmail Quick Login Modal
-  const [showGmailModal, setShowGmailModal] = useState(false);
-  const [gmailInput, setGmailInput] = useState("");
-  const [nameInput, setNameInput] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [loggingIn, setLoggingIn] = useState(false);
 
   const loadComments = async () => {
     try {
@@ -94,31 +88,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
     }
   };
 
-  const handleQuickGmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError("");
-    const email = gmailInput.trim().toLowerCase();
-    if (!email || !email.includes("@")) {
-      setLoginError("Vui lòng nhập địa chỉ email hợp lệ (Ví dụ: name@gmail.com)");
-      return;
-    }
-
-    setLoggingIn(true);
-    try {
-      await loginGoogle({
-        email,
-        name: nameInput.trim() || email.split("@")[0],
-      });
-      setShowGmailModal(false);
-      setGmailInput("");
-      setNameInput("");
-    } catch (err: any) {
-      setLoginError(err.message || "Đăng nhập thất bại");
-    } finally {
-      setLoggingIn(false);
-    }
-  };
-
   const countTotalComments = (list: Comment[]): number => {
     return list.reduce((acc, c) => acc + 1 + (c.replies ? c.replies.length : 0), 0);
   };
@@ -168,30 +137,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => setShowGmailModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 hover:border-blue-500 text-xs font-semibold text-stone-700 dark:text-stone-300 shadow-sm transition-all"
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                />
-              </svg>
-              <span>Đăng nhập Gmail</span>
-            </button>
+            <GoogleLoginButton onSuccess={loadComments} buttonText="Đăng nhập Gmail" />
           )}
         </div>
       </div>
@@ -393,77 +339,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
           ))
         )}
       </div>
-
-      {/* Gmail Quick Login Modal */}
-      {showGmailModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-stone-900 rounded-3xl p-6 max-w-sm w-full border border-stone-200 dark:border-stone-800 shadow-2xl space-y-4">
-            <div className="text-center space-y-1">
-              <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center mx-auto text-blue-600 mb-2">
-                <UserIcon className="w-5 h-5" />
-              </div>
-              <h3 className="font-bold text-base text-stone-900 dark:text-white">
-                Đăng Nhập Bình Luận
-              </h3>
-              <p className="text-xs text-stone-500">
-                Nhập địa chỉ Gmail để hiển thị danh tính khi tham gia thảo luận trên blog.
-              </p>
-            </div>
-
-            {loginError && (
-              <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 text-xs border border-rose-200 dark:border-rose-900">
-                {loginError}
-              </div>
-            )}
-
-            <form onSubmit={handleQuickGmailLogin} className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
-                  Địa chỉ Gmail *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={gmailInput}
-                  onChange={(e) => setGmailInput(e.target.value)}
-                  placeholder="name@gmail.com"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
-                  Họ tên hiển thị
-                </label>
-                <input
-                  type="text"
-                  value={nameInput}
-                  onChange={(e) => setNameInput(e.target.value)}
-                  placeholder="Ví dụ: Nguyễn Văn A..."
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowGmailModal(false)}
-                  className="px-3 py-2 text-xs text-stone-400 hover:text-stone-600"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={loggingIn}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-colors"
-                >
-                  {loggingIn ? "Đang xác thực..." : "Xác nhận đăng nhập"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </section>
   );
 };
