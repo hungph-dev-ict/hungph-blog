@@ -380,7 +380,7 @@ export default function AdminSeriesPage() {
 
               {/* Chapters list */}
               <div className="space-y-3 pt-2">
-                {selectedDetail.chapters.map((ch, idx) => (
+                {selectedDetail.chapters?.map((ch, idx) => (
                   <div
                     key={ch.id}
                     className="p-4 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-800/40 space-y-2.5"
