@@ -13,6 +13,9 @@ import {
   ArrowLeft,
   X,
   Check,
+  Upload,
+  Image as ImageIcon,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -26,6 +29,7 @@ import {
   deleteChapter,
   fetchCategories,
   getFullImageUrl,
+  uploadMedia,
 } from "@/lib/api";
 import { Category, Series, SeriesDetail } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
@@ -63,6 +67,29 @@ export default function AdminSeriesPage() {
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
   const [editingChapterTitle, setEditingChapterTitle] = useState("");
   const [editingChapterDesc, setEditingChapterDesc] = useState("");
+
+  // Upload cover state
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+    setUploadingCover(true);
+    try {
+      const res = await uploadMedia(file, token);
+      if (isEdit) {
+        setEditCoverImage(res.url);
+      } else {
+        setCoverImage(res.url);
+      }
+    } catch (err: any) {
+      alert(`Lỗi tải ảnh lên: ${err.message}`);
+    } finally {
+      setUploadingCover(false);
+      // Reset input value so same file can be selected again if needed
+      e.target.value = "";
+    }
+  };
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -135,7 +162,7 @@ export default function AdminSeriesPage() {
         {
           title: editTitle.trim(),
           summary: editSummary.trim() || undefined,
-          cover_image: editCoverImage.trim() || undefined,
+          cover_image: editCoverImage.trim() ? editCoverImage.trim() : "",
           category_id: editCategoryId || undefined,
           is_published: editIsPublished,
         },
@@ -330,13 +357,53 @@ export default function AdminSeriesPage() {
               className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
             />
 
-            <input
-              type="text"
-              value={coverImage}
-              onChange={(e) => setCoverImage(e.target.value)}
-              placeholder="URL ảnh bìa khóa học (Để trống sẽ dùng ảnh mặc định chuẩn)..."
-              className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
-            />
+            {/* Cover image input & upload */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={coverImage}
+                  onChange={(e) => setCoverImage(e.target.value)}
+                  placeholder="URL ảnh bìa (hoặc bấm nút tải ảnh từ máy)..."
+                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
+                />
+                <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-semibold cursor-pointer shrink-0 transition-colors">
+                  {uploadingCover ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5 text-blue-600" />
+                  )}
+                  <span>{uploadingCover ? "Đang tải..." : "Tải ảnh từ máy"}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingCover}
+                    onChange={(e) => handleCoverUpload(e, false)}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {coverImage && (
+                <div className="flex items-center gap-3 p-2 rounded-xl bg-stone-100 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+                  <img
+                    src={getFullImageUrl(coverImage)}
+                    alt="Preview"
+                    className="w-16 h-12 object-cover rounded-lg"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-stone-500 truncate">{coverImage}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCoverImage("")}
+                    className="text-xs text-rose-600 hover:underline px-2 py-1"
+                  >
+                    Xóa ảnh
+                  </button>
+                </div>
+              )}
+            </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <button
@@ -402,20 +469,59 @@ export default function AdminSeriesPage() {
               className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-              <input
-                type="text"
-                value={editCoverImage}
-                onChange={(e) => setEditCoverImage(e.target.value)}
-                placeholder="URL ảnh bìa..."
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
-              />
-              <label className="flex items-center gap-2 text-xs font-medium text-stone-700 dark:text-stone-300 cursor-pointer">
+            {/* Cover image input & upload for edit */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={editCoverImage}
+                  onChange={(e) => setEditCoverImage(e.target.value)}
+                  placeholder="URL ảnh bìa (hoặc bấm nút tải ảnh từ máy)..."
+                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
+                />
+                <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-semibold cursor-pointer shrink-0 transition-colors">
+                  {uploadingCover ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5 text-amber-600" />
+                  )}
+                  <span>{uploadingCover ? "Đang tải..." : "Tải ảnh từ máy"}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingCover}
+                    onChange={(e) => handleCoverUpload(e, true)}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {editCoverImage && (
+                <div className="flex items-center gap-3 p-2 rounded-xl bg-amber-100/50 dark:bg-stone-800/80 border border-amber-200 dark:border-stone-700">
+                  <img
+                    src={getFullImageUrl(editCoverImage)}
+                    alt="Preview"
+                    className="w-16 h-12 object-cover rounded-lg"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-stone-500 truncate">{editCoverImage}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditCoverImage("")}
+                    className="text-xs text-rose-600 hover:underline px-2 py-1 font-medium"
+                  >
+                    Xóa ảnh
+                  </button>
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 text-xs font-medium text-stone-700 dark:text-stone-300 cursor-pointer pt-1">
                 <input
                   type="checkbox"
                   checked={editIsPublished}
                   onChange={(e) => setEditIsPublished(e.target.checked)}
-                  className="rounded border-stone-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
                 />
                 <span>Xuất bản công khai khóa học</span>
               </label>

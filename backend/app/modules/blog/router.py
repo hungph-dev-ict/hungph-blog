@@ -658,7 +658,7 @@ async def update_series(
     if series_in.summary is not None:
         s.summary = series_in.summary
     if series_in.cover_image is not None:
-        s.cover_image = series_in.cover_image
+        s.cover_image = series_in.cover_image.strip() if series_in.cover_image.strip() else None
     if series_in.is_published is not None:
         s.is_published = series_in.is_published
     if series_in.category_id is not None:
