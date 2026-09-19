@@ -208,3 +208,38 @@ class PaginatedPosts(BaseModel):
     page: int
     limit: int
     total_pages: int
+
+
+# --- Comments (WordPress style & Gmail Auth) ---
+class CommentCreate(BaseModel):
+    content: str
+    author_name: Optional[str] = None
+    author_email: Optional[str] = None
+    parent_id: Optional[str] = None
+
+
+class CommentReplyResponse(BaseModel):
+    id: str
+    post_id: str
+    author_name: str
+    author_avatar: Optional[str] = None
+    content: str
+    parent_id: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CommentResponse(BaseModel):
+    id: str
+    post_id: str
+    author_name: str
+    author_avatar: Optional[str] = None
+    content: str
+    parent_id: Optional[str] = None
+    created_at: datetime
+    replies: List[CommentReplyResponse] = []
+
+    class Config:
+        from_attributes = True

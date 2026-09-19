@@ -103,6 +103,30 @@ class Post(Base):
     author = relationship("app.modules.auth.models.User", lazy="selectin")
     series = relationship("Series", back_populates="posts", lazy="selectin")
     chapter = relationship("Chapter", back_populates="posts", lazy="selectin")
+    comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan", order_by="Comment.created_at.desc()", lazy="selectin")
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class Comment(Base):
+    """Mô hình Bình luận bài viết kiểu WordPress, hỗ trợ người dùng Gmail & khách."""
+    __tablename__ = "comments"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    post_id = Column(String(36), ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    author_name = Column(String(100), nullable=False)
+    author_email = Column(String(255), nullable=True)
+    author_avatar = Column(String(500), nullable=True)
+    content = Column(Text, nullable=False)
+
+    parent_id = Column(String(36), ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
+    is_approved = Column(Boolean, default=True)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("app.modules.auth.models.User", lazy="selectin")
+    post = relationship("Post", back_populates="comments")
+    replies = relationship("Comment", cascade="all, delete-orphan", order_by="Comment.created_at.asc()", lazy="selectin")

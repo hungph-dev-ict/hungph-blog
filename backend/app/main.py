@@ -21,6 +21,13 @@ async def init_default_data():
     """Tự động khởi tạo bảng và dữ liệu mẫu nếu database đang trống."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Bổ sung các cột mới nếu bảng users đã tồn tại trước đó
+        try:
+            from sqlalchemy import text
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500);"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(100);"))
+        except Exception as mig_err:
+            print(f"Migration note: {mig_err}")
 
     async with AsyncSessionLocal() as db:
         # Kiểm tra Admin

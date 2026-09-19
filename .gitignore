@@ -4,9 +4,8 @@ Thumbs.db
 
 # Backend
 backend/venv/
-backend/__pycache__/
-backend/*/__pycache__/
-backend/*/*/__pycache__/
+**/__pycache__/
+*.py[cod]
 backend/.env
 backend/blog.db
 backend/uploads/*

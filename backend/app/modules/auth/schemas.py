@@ -7,6 +7,7 @@ class UserBase(BaseModel):
     email: EmailStr
     username: str
     full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class UserCreate(UserBase):
@@ -16,6 +17,13 @@ class UserCreate(UserBase):
 class UserLogin(BaseModel):
     username_or_email: str
     password: str
+
+
+class GoogleAuthRequest(BaseModel):
+    credential: Optional[str] = None
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    picture: Optional[str] = None
 
 
 class UserResponse(UserBase):

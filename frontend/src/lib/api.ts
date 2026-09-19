@@ -1,6 +1,7 @@
 import {
   Category,
   Chapter,
+  Comment,
   LoginResponse,
   PaginatedPosts,
   PostDetail,
@@ -392,5 +393,64 @@ export async function analyzeText(text: string): Promise<any> {
     body: JSON.stringify({ text }),
   });
   if (!res.ok) throw new Error("Text analysis failed");
+  return res.json();
+}
+
+// --- COMMENTS (WordPress Style & Gmail Login) ---
+export async function fetchComments(postIdOrSlug: string): Promise<Comment[]> {
+  const res = await fetch(`${API_BASE_URL}/blog/posts/${postIdOrSlug}/comments`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createComment(
+  postIdOrSlug: string,
+  data: {
+    content: string;
+    author_name?: string;
+    author_email?: string;
+    parent_id?: string;
+  },
+  token?: string | null
+): Promise<Comment> {
+  const res = await fetch(`${API_BASE_URL}/blog/posts/${postIdOrSlug}/comments`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Không thể gửi bình luận");
+  }
+  return res.json();
+}
+
+export async function deleteComment(commentId: string, token: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/blog/comments/${commentId}`, {
+    method: "DELETE",
+    headers: getHeaders(token),
+  });
+  if (!res.ok) {
+    throw new Error("Không thể xóa bình luận");
+  }
+}
+
+export async function loginWithGoogle(payload: {
+  credential?: string;
+  email?: string;
+  name?: string;
+  picture?: string;
+}): Promise<LoginResponse> {
+  const res = await fetch(`${API_BASE_URL}/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Đăng nhập Google thất bại");
+  }
   return res.json();
 }

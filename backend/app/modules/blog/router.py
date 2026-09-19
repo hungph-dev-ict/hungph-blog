@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.modules.auth.deps import get_current_admin, get_current_user
+from app.modules.auth.deps import get_current_admin, get_current_user, get_optional_user
 from app.modules.auth.models import User
-from app.modules.blog.models import Category, Chapter, Post, Series, Tag, post_tags
+from app.modules.blog.models import Category, Chapter, Comment, Post, Series, Tag, post_tags
 from app.modules.blog.schemas import (
     CategoryCreate,
     CategoryResponse,
@@ -20,6 +20,9 @@ from app.modules.blog.schemas import (
     ChapterResponse,
     ChapterUpdate,
     ChapterWithLessons,
+    CommentCreate,
+    CommentReplyResponse,
+    CommentResponse,
     LessonBrief,
     PaginatedPosts,
     PostCreate,
@@ -754,3 +757,116 @@ async def delete_chapter(
     await db.delete(ch)
     await db.commit()
     return None
+
+
+# --- COMMENTS (WordPress Style & Gmail Auth) ---
+
+@router.get("/posts/{post_id_or_slug}/comments", response_model=List[CommentResponse])
+async def list_comments(post_id_or_slug: str, db: AsyncSession = Depends(get_db)):
+    """Lấy danh sách bình luận đã duyệt của bài viết (bao gồm các phản hồi lồng nhau)."""
+    # Tìm bài viết theo id hoặc slug
+    stmt_post = select(Post.id).where((Post.id == post_id_or_slug) | (Post.slug == post_id_or_slug))
+    post_res = await db.execute(stmt_post)
+    post_id = post_res.scalar_one_or_none()
+    if not post_id:
+        raise HTTPException(status_code=404, detail="Bài viết không tồn tại")
+
+    # Chỉ lấy các bình luận gốc (parent_id is None)
+    stmt = (
+        select(Comment)
+        .where(
+            Comment.post_id == post_id,
+            Comment.parent_id.is_(None),
+            Comment.is_approved == True
+        )
+        .options(selectinload(Comment.replies))
+        .order_by(desc(Comment.created_at))
+    )
+    res = await db.execute(stmt)
+    comments = res.scalars().all()
+    return [CommentResponse.model_validate(c) for c in comments]
+
+
+@router.post("/posts/{post_id_or_slug}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
+async def create_comment(
+    post_id_or_slug: str,
+    comment_in: CommentCreate,
+    db: AsyncSession = Depends(get_db),
+    optional_user: Optional[User] = Depends(get_optional_user)
+):
+    """Đăng bình luận vào bài viết. Hỗ trợ người dùng đăng nhập Gmail hoặc khách (vãng lai)."""
+    stmt_post = select(Post).where((Post.id == post_id_or_slug) | (Post.slug == post_id_or_slug))
+    post_res = await db.execute(stmt_post)
+    post = post_res.scalar_one_or_none()
+    if not post:
+        raise HTTPException(status_code=404, detail="Bài viết không tồn tại")
+
+    content = comment_in.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Nội dung bình luận không được để trống")
+
+    if optional_user:
+        author_name = optional_user.full_name or optional_user.username
+        author_email = optional_user.email
+        author_avatar = optional_user.avatar_url
+        user_id = optional_user.id
+    else:
+        author_name = (comment_in.author_name or "").strip() or "Độc giả ẩn danh"
+        author_email = (comment_in.author_email or "").strip() or None
+        author_avatar = None
+        user_id = None
+
+    # Nếu là phản hồi cho 1 bình luận khác
+    if comment_in.parent_id:
+        p_stmt = select(Comment).where(Comment.id == comment_in.parent_id, Comment.post_id == post.id)
+        p_res = await db.execute(p_stmt)
+        if not p_res.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Bình luận cha không tồn tại")
+
+    new_comment = Comment(
+        post_id=post.id,
+        user_id=user_id,
+        author_name=author_name,
+        author_email=author_email,
+        author_avatar=author_avatar,
+        content=content,
+        parent_id=comment_in.parent_id,
+        is_approved=True
+    )
+    db.add(new_comment)
+    await db.commit()
+    await db.refresh(new_comment)
+
+    # Load lại kèm replies rỗng
+    return CommentResponse(
+        id=new_comment.id,
+        post_id=new_comment.post_id,
+        author_name=new_comment.author_name,
+        author_avatar=new_comment.author_avatar,
+        content=new_comment.content,
+        parent_id=new_comment.parent_id,
+        created_at=new_comment.created_at,
+        replies=[]
+    )
+
+
+@router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_comment(
+    comment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Xóa bình luận (Dành cho Admin hoặc chính người đã viết bình luận)."""
+    stmt = select(Comment).where(Comment.id == comment_id)
+    res = await db.execute(stmt)
+    comment = res.scalar_one_or_none()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Bình luận không tồn tại")
+
+    if not current_user.is_admin and comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Không có quyền xóa bình luận này")
+
+    await db.delete(comment)
+    await db.commit()
+    return None
+

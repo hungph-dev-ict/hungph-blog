@@ -27,11 +27,6 @@ export default function AdminLoginPage() {
     }
   };
 
-  const fillDefaultCredentials = () => {
-    setIdentifier("admin");
-    setPassword("Admin@123456");
-  };
-
   return (
     <div className="max-w-md mx-auto py-16 px-4 space-y-8">
       <div className="text-center space-y-2">
@@ -67,7 +62,7 @@ export default function AdminLoginPage() {
               required
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="admin hoặc admin@hungph.dev"
+              placeholder="Tên đăng nhập hoặc email..."
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -98,17 +93,6 @@ export default function AdminLoginPage() {
           <span>{loading ? "Đang xác thực..." : "Đăng nhập"}</span>
           <ArrowRight className="w-4 h-4" />
         </button>
-
-        {/* Quick Demo Fill */}
-        <div className="pt-2 border-t border-stone-100 dark:border-stone-800 text-center">
-          <button
-            type="button"
-            onClick={fillDefaultCredentials}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            Điền tài khoản mặc định (admin / Admin@123456)
-          </button>
-        </div>
       </form>
     </div>
   );

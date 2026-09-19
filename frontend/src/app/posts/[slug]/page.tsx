@@ -21,6 +21,7 @@ import { fetchPostBySlug, getFullImageUrl } from "@/lib/api";
 import { PostDetail } from "@/lib/types";
 import { TableOfContents } from "@/components/blog/TableOfContents";
 import { ReadingProgressBar } from "@/components/blog/ReadingProgressBar";
+import { CommentSection } from "@/components/blog/CommentSection";
 
 export default function PostDetailPage() {
   const params = useParams();
@@ -286,6 +287,9 @@ export default function PostDetailPage() {
                 </div>
               </div>
             )}
+
+            {/* Comments Section (WordPress Style & Gmail Login) */}
+            <CommentSection postId={post.id} />
           </article>
 
           {/* Sidebar */}

@@ -9,6 +9,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (identifier: string, pass: string) => Promise<void>;
+  loginGoogle: (payload: { credential?: string; email?: string; name?: string; picture?: string }) => Promise<void>;
   logout: () => void;
 }
 
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   token: null,
   isLoading: true,
   login: async () => {},
+  loginGoogle: async () => {},
   logout: () => {},
 });
 
@@ -55,6 +57,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setUser(data.user);
   };
 
+  const loginGoogle = async (payload: { credential?: string; email?: string; name?: string; picture?: string }) => {
+    const { loginWithGoogle } = await import("./api");
+    const data = await loginWithGoogle(payload);
+    localStorage.setItem("hungph_blog_token", data.access_token);
+    setToken(data.access_token);
+    setUser(data.user);
+  };
+
   const logout = () => {
     localStorage.removeItem("hungph_blog_token");
     setToken(null);
@@ -62,7 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, loginGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

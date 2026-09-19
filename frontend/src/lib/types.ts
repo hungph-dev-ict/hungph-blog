@@ -3,8 +3,20 @@ export interface User {
   email: string;
   username: string;
   full_name?: string;
+  avatar_url?: string;
   is_admin: boolean;
   created_at: string;
+}
+
+export interface Comment {
+  id: string;
+  post_id: string;
+  author_name: string;
+  author_avatar?: string;
+  content: string;
+  parent_id?: string;
+  created_at: string;
+  replies?: Comment[];
 }
 
 export interface Tag {
