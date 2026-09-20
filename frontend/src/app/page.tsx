@@ -6,8 +6,8 @@ import Link from "next/link";
 import { fetchCategories, fetchPosts, fetchLatestSeries, getFullCourseImageUrl, getFullImageUrl } from "@/lib/api";
 import { Category, PaginatedPosts, Series } from "@/lib/types";
 import { PostCard } from "@/components/blog/PostCard";
-import { useLoading } from "@/lib/loading-context";
 import { Pagination } from "@/components/common/Pagination";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 function formatCourseDuration(minutes?: number) {
   if (!minutes || minutes <= 0) return null;
@@ -19,7 +19,6 @@ function formatCourseDuration(minutes?: number) {
 }
 
 export default function HomePage() {
-  const { withLoading } = useLoading();
   const [postsData, setPostsData] = useState<PaginatedPosts | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [latestSeries, setLatestSeries] = useState<Series | null>(null);
@@ -27,16 +26,18 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadingMessage, setLoadingMessage] = useState<string>("Đang tải bài viết mới nhất...");
   const [seriesLoading, setSeriesLoading] = useState<boolean>(true);
+  const [categoriesLoading, setCategoriesLoading] = useState<boolean>(true);
 
   const loadPosts = async (
     targetPage = currentPage,
     targetCategory = selectedCategory,
     targetSearch = searchQuery,
-    overlayMessage?: string
+    customMessage?: string
   ) => {
     const msg =
-      overlayMessage ||
+      customMessage ||
       (targetSearch
         ? "Đang tìm kiếm bài viết..."
         : targetCategory
@@ -45,32 +46,35 @@ export default function HomePage() {
         ? `Đang tải trang ${targetPage}...`
         : "Đang tải bài viết mới nhất...");
 
-    await withLoading(async () => {
-      setLoading(true);
-      try {
-        const data = await fetchPosts({
-          page: targetPage,
-          limit: 8,
-          category: targetCategory || undefined,
-          search: targetSearch || undefined,
-        });
-        // Sort by published_at or created_at descending (newest first)
-        data.items = data.items.sort((a, b) => {
-          const dateA = new Date(a.published_at || a.created_at).getTime();
-          const dateB = new Date(b.published_at || b.created_at).getTime();
-          return dateB - dateA;
-        });
-        setPostsData(data);
-      } catch (err) {
-        console.error("Lỗi tải bài viết:", err);
-      } finally {
-        setLoading(false);
-      }
-    }, msg);
+    setLoadingMessage(msg);
+    setLoading(true);
+    try {
+      const data = await fetchPosts({
+        page: targetPage,
+        limit: 8,
+        category: targetCategory || undefined,
+        search: targetSearch || undefined,
+      });
+      // Sort by published_at or created_at descending (newest first)
+      data.items = data.items.sort((a, b) => {
+        const dateA = new Date(a.published_at || a.created_at).getTime();
+        const dateB = new Date(b.published_at || b.created_at).getTime();
+        return dateB - dateA;
+      });
+      setPostsData(data);
+    } catch (err) {
+      console.error("Lỗi tải bài viết:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchCategories().then(setCategories).catch(console.error);
+    fetchCategories()
+      .then(setCategories)
+      .catch(console.error)
+      .finally(() => setCategoriesLoading(false));
+
     // Fetch the latest series dynamically
     fetchLatestSeries()
       .then(setLatestSeries)
@@ -254,28 +258,46 @@ export default function HomePage() {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => handleSelectCategory("")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${selectedCategory === ""
-                ? "bg-stone-900 dark:bg-white text-white dark:text-stone-900 shadow-sm"
-                : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700"
+        <div className="relative min-h-[42px]">
+          <LoadingOverlay isLoading={categoriesLoading} message="Đang tải chủ đề..." />
+
+          {categoriesLoading && categories.length === 0 ? (
+            <div className="flex flex-wrap items-center gap-2 animate-pulse">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-8 w-24 rounded-xl bg-stone-100 dark:bg-stone-800" />
+              ))}
+            </div>
+          ) : (
+            <div
+              className={`flex flex-wrap items-center gap-2 transition-opacity duration-200 ${
+                categoriesLoading ? "opacity-40 pointer-events-none" : ""
               }`}
-          >
-            Tất cả bài viết
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => handleSelectCategory(cat.slug)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${selectedCategory === cat.slug
-                  ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20"
-                  : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700"
-                }`}
             >
-              {cat.name}
-            </button>
-          ))}
+              <button
+                onClick={() => handleSelectCategory("")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                  selectedCategory === ""
+                    ? "bg-stone-900 dark:bg-white text-white dark:text-stone-900 shadow-sm"
+                    : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700"
+                }`}
+              >
+                Tất cả bài viết
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => handleSelectCategory(cat.slug)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                    selectedCategory === cat.slug
+                      ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20"
+                      : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700"
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -302,34 +324,47 @@ export default function HomePage() {
           )}
         </div>
 
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-44 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900/50 p-6 animate-pulse"
-              />
-            ))}
-          </div>
-        ) : postsData && postsData.items.length > 0 ? (
-          <div className="grid grid-cols-1 gap-5">
-            {postsData.items.map((post) => (
-              <PostCard key={post.id} post={post} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-16 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3">
-            <div className="w-12 h-12 mx-auto rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400">
-              <TagIcon className="w-6 h-6" />
+        {/* Section Container with Local Loading Overlay */}
+        <div className="relative min-h-[360px]">
+          <LoadingOverlay
+            isLoading={loading}
+            message={loadingMessage}
+            rounded="rounded-3xl"
+          />
+
+          {!postsData && loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-44 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900/50 p-6 animate-pulse"
+                />
+              ))}
             </div>
-            <h3 className="font-semibold text-stone-800 dark:text-stone-200">
-              Chưa tìm thấy bài viết nào
-            </h3>
-            <p className="text-sm text-stone-500 dark:text-stone-400 max-w-sm mx-auto">
-              Thử tìm kiếm với từ khóa khác hoặc quay lại danh mục "Tất cả bài viết".
-            </p>
-          </div>
-        )}
+          ) : postsData && postsData.items.length > 0 ? (
+            <div
+              className={`grid grid-cols-1 gap-5 transition-opacity duration-200 ${
+                loading ? "opacity-50 pointer-events-none" : "opacity-100"
+              }`}
+            >
+              {postsData.items.map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-16 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400">
+                <TagIcon className="w-6 h-6" />
+              </div>
+              <h3 className="font-semibold text-stone-800 dark:text-stone-200">
+                Chưa tìm thấy bài viết nào
+              </h3>
+              <p className="text-sm text-stone-500 dark:text-stone-400 max-w-sm mx-auto">
+                Thử tìm kiếm với từ khóa khác hoặc quay lại danh mục &ldquo;Tất cả bài viết&rdquo;.
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Pagination Controls */}
         {postsData && postsData.total_pages > 1 && (

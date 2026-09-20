@@ -23,7 +23,7 @@ import {
   getFullImageUrl,
 } from "@/lib/api";
 import { Collaborator, User } from "@/lib/types";
-import { useLoading } from "@/lib/loading-context";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 interface SeriesCollaboratorsManagerProps {
   seriesId: string;
@@ -44,9 +44,9 @@ export function SeriesCollaboratorsManager({
   onClose,
   compact = false,
 }: SeriesCollaboratorsManagerProps) {
-  const { withLoading } = useLoading();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [selectedUserIdToAdd, setSelectedUserIdToAdd] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -84,16 +84,17 @@ export function SeriesCollaboratorsManager({
     setActionError(null);
     setActionSuccess(null);
     const label = status === "accepted" ? "Phê duyệt" : "Từ chối";
-    await withLoading(async () => {
-      try {
-        await updateCollaborator(seriesId, userId, status, token);
-        setActionSuccess(`Đã ${label.toLowerCase()} yêu cầu của "${userName}" thành công.`);
-        await loadData();
-        setTimeout(() => setActionSuccess(null), 3500);
-      } catch (err: unknown) {
-        setActionError(err instanceof Error ? err.message : `${label} thất bại`);
-      }
-    }, `Đang ${label.toLowerCase()} yêu cầu...`);
+    setActionLoading(`Đang ${label.toLowerCase()} yêu cầu...`);
+    try {
+      await updateCollaborator(seriesId, userId, status, token);
+      setActionSuccess(`Đã ${label.toLowerCase()} yêu cầu của "${userName}" thành công.`);
+      await loadData();
+      setTimeout(() => setActionSuccess(null), 3500);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : `${label} thất bại`);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleRemove = async (userId: string, userName: string) => {
@@ -102,33 +103,35 @@ export function SeriesCollaboratorsManager({
     }
     setActionError(null);
     setActionSuccess(null);
-    await withLoading(async () => {
-      try {
-        await removeCollaborator(seriesId, userId, token);
-        setActionSuccess(`Đã gỡ quyền cộng tác của "${userName}".`);
-        await loadData();
-        setTimeout(() => setActionSuccess(null), 3500);
-      } catch (err: unknown) {
-        setActionError(err instanceof Error ? err.message : "Gỡ cộng tác viên thất bại");
-      }
-    }, "Đang gỡ quyền cộng tác viên...");
+    setActionLoading("Đang gỡ quyền cộng tác viên...");
+    try {
+      await removeCollaborator(seriesId, userId, token);
+      setActionSuccess(`Đã gỡ quyền cộng tác của "${userName}".`);
+      await loadData();
+      setTimeout(() => setActionSuccess(null), 3500);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : "Gỡ cộng tác viên thất bại");
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleDirectAdd = async () => {
     if (!selectedUserIdToAdd) return;
     setActionError(null);
     setActionSuccess(null);
-    await withLoading(async () => {
-      try {
-        await addCollaboratorDirect(seriesId, selectedUserIdToAdd, token);
-        setSelectedUserIdToAdd("");
-        setActionSuccess("Đã thêm cộng tác viên thành công.");
-        await loadData();
-        setTimeout(() => setActionSuccess(null), 3500);
-      } catch (err: unknown) {
-        setActionError(err instanceof Error ? err.message : "Thêm cộng tác viên thất bại");
-      }
-    }, "Đang thêm cộng tác viên...");
+    setActionLoading("Đang thêm cộng tác viên...");
+    try {
+      await addCollaboratorDirect(seriesId, selectedUserIdToAdd, token);
+      setSelectedUserIdToAdd("");
+      setActionSuccess("Đã thêm cộng tác viên thành công.");
+      await loadData();
+      setTimeout(() => setActionSuccess(null), 3500);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : "Thêm cộng tác viên thất bại");
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const pendingList = collaborators.filter((c) => c.status === "pending");
@@ -198,13 +201,24 @@ export function SeriesCollaboratorsManager({
       )}
 
       {/* Main Content Loading */}
-      {loading && collaborators.length === 0 ? (
-        <div className="py-12 flex flex-col items-center justify-center gap-2 text-stone-400 text-xs">
-          <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-          <span>Đang tải danh sách cộng tác viên...</span>
-        </div>
-      ) : (
-        <div className="space-y-6">
+      <div className="relative min-h-[180px]">
+        <LoadingOverlay
+          isLoading={loading || Boolean(actionLoading)}
+          message={actionLoading || "Đang tải cộng tác viên..."}
+        />
+
+        {loading && collaborators.length === 0 ? (
+          <div className="space-y-3 animate-pulse">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-20 rounded-2xl bg-stone-100 dark:bg-stone-800" />
+            ))}
+          </div>
+        ) : (
+          <div
+            className={`space-y-6 transition-opacity duration-200 ${
+              loading || actionLoading ? "opacity-40 pointer-events-none" : ""
+            }`}
+          >
           {/* 1. YÊU CẦU CHỜ DUYỆT (PENDING REQUESTS) */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -435,7 +449,8 @@ export function SeriesCollaboratorsManager({
             </div>
           )}
         </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

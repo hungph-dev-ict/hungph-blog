@@ -42,6 +42,7 @@ import { HierarchyConfigEditor } from "@/components/series/HierarchyConfigEditor
 import { ChapterNode, buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
 import { useLoading } from "@/lib/loading-context";
 import { SeriesCollaboratorsManager } from "@/components/series/SeriesCollaboratorsManager";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 function AdminSeriesContent() {
   const router = useRouter();
@@ -836,19 +837,22 @@ function AdminSeriesContent() {
             Các khóa học hiện có ({seriesList.length})
           </div>
 
-          {loading ? (
-            <div className="space-y-3 animate-pulse">
-              {[1, 2].map((i) => (
-                <div key={i} className="h-28 rounded-2xl bg-stone-100 dark:bg-stone-800" />
-              ))}
-            </div>
-          ) : seriesList.length === 0 ? (
-            <div className="p-8 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl text-xs text-stone-400">
-              Chưa có khóa học nào. Hãy tạo khóa học đầu tiên ở nút phía trên!
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {seriesList.map((s) => {
+          <div className="relative min-h-[300px]">
+            <LoadingOverlay isLoading={loading} message="Đang tải danh sách khóa học..." />
+
+            {loading && seriesList.length === 0 ? (
+              <div className="space-y-3 animate-pulse">
+                {[1, 2].map((i) => (
+                  <div key={i} className="h-28 rounded-2xl bg-stone-100 dark:bg-stone-800" />
+                ))}
+              </div>
+            ) : seriesList.length === 0 ? (
+              <div className="p-8 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl text-xs text-stone-400">
+                Chưa có khóa học nào. Hãy tạo khóa học đầu tiên ở nút phía trên!
+              </div>
+            ) : (
+              <div className={`space-y-3 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
+                {seriesList.map((s) => {
                 const isSelected = selectedSeriesSlug === s.slug || selectedDetail?.slug === s.slug || selectedDetail?.id === s.id;
                 return (
                   <div
@@ -953,6 +957,7 @@ function AdminSeriesContent() {
               })}
             </div>
           )}
+          </div>
         </div>
 
         {/* Right: Chi tiết Dàn Outline & Quản lý Chương */}
@@ -961,13 +966,20 @@ function AdminSeriesContent() {
             Dàn Outline & Các Chương
           </div>
 
-          {detailLoading ? (
-            <div className="p-12 text-center border border-stone-200 dark:border-stone-800 rounded-3xl text-xs text-stone-500 bg-white dark:bg-stone-900/40 flex flex-col items-center justify-center gap-3 shadow-sm">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-              <span>Đang tải dàn bài học của khóa học...</span>
-            </div>
-          ) : selectedDetail ? (
-            <div className="p-6 rounded-3xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 space-y-5 shadow-sm">
+          <div className="relative min-h-[360px]">
+            <LoadingOverlay isLoading={detailLoading} message="Đang tải dàn bài học..." />
+
+            {!selectedDetail && !detailLoading ? (
+              <div className="p-12 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl text-xs text-stone-400">
+                Chọn một khóa học bên trái để xem và quản lý dàn outline từng chương.
+              </div>
+            ) : !selectedDetail && detailLoading ? (
+              <div className="p-12 text-center border border-stone-200 dark:border-stone-800 rounded-3xl text-xs text-stone-500 bg-white dark:bg-stone-900/40 space-y-3">
+                <div className="h-24 rounded-2xl bg-stone-100 dark:bg-stone-800 animate-pulse" />
+                <div className="h-40 rounded-2xl bg-stone-100 dark:bg-stone-800 animate-pulse" />
+              </div>
+            ) : selectedDetail ? (
+              <div className={`p-6 rounded-3xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 space-y-5 shadow-sm transition-opacity duration-200 ${detailLoading ? "opacity-40 pointer-events-none" : ""}`}>
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-bold text-base text-stone-900 dark:text-white">
@@ -1289,11 +1301,8 @@ function AdminSeriesContent() {
                 </>
               )}
             </div>
-          ) : (
-            <div className="p-12 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl text-xs text-stone-400">
-              Chọn một khóa học bên trái để xem và quản lý dàn outline từng chương.
-            </div>
-          )}
+          ) : null}
+          </div>
         </div>
       </div>
     </div>

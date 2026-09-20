@@ -5,8 +5,8 @@ import Link from "next/link";
 import { Folder, Hash, ArrowRight } from "lucide-react";
 import { fetchCategories, fetchTags } from "@/lib/api";
 import { Category, Tag } from "@/lib/types";
-
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -42,14 +42,17 @@ export default function CategoriesPage() {
           <span>Danh mục chính</span>
         </div>
 
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-28 rounded-2xl bg-stone-200 dark:bg-stone-800" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="relative min-h-[140px]">
+          <LoadingOverlay isLoading={loading} message="Đang tải danh mục..." />
+
+          {loading && categories.length === 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-28 rounded-2xl bg-stone-200 dark:bg-stone-800" />
+              ))}
+            </div>
+          ) : (
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
             {categories.map((cat) => (
               <Link
                 key={cat.id}
@@ -71,6 +74,7 @@ export default function CategoriesPage() {
             ))}
           </div>
         )}
+        </div>
       </section>
 
       {/* Tags */}

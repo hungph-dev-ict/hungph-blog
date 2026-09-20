@@ -39,6 +39,7 @@ import { buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { useLoading } from "@/lib/loading-context";
 import { SeriesCollaboratorsManager } from "@/components/series/SeriesCollaboratorsManager";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 interface SeriesDetailClientProps {
   initialSeries: SeriesDetail;
@@ -50,6 +51,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
   const { withLoading } = useLoading();
 
   const [series, setSeries] = useState<SeriesDetail>(initialSeries);
+  const [outlineActionLoading, setOutlineActionLoading] = useState<string | null>(null);
   useEffect(() => {
     setSeries(initialSeries);
   }, [initialSeries]);
@@ -178,29 +180,29 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
     if (!token || !chapterTitleInput.trim()) return;
     setIsCreatingChapter(true);
     setCreateChapterError("");
+    setOutlineActionLoading("Đang tạo mục mới...");
 
-    await withLoading(async () => {
-      try {
-        await addChapter(
-          series.id,
-          {
-            title: chapterTitleInput.trim(),
-            description: chapterDescInput.trim() || undefined,
-            parent_id: parentChapter?.id || undefined,
-            level: createChapterLevel,
-            order: createChapterOrder,
-          },
-          token
-        );
-        setShowCreateChapterModal(false);
-        const refreshed = await fetchSeriesBySlug(series.slug);
-        setSeries(refreshed);
-      } catch (err: unknown) {
-        setCreateChapterError(err instanceof Error ? err.message : "Tạo thất bại");
-      } finally {
-        setIsCreatingChapter(false);
-      }
-    }, "Đang tạo mục mới...");
+    try {
+      await addChapter(
+        series.id,
+        {
+          title: chapterTitleInput.trim(),
+          description: chapterDescInput.trim() || undefined,
+          parent_id: parentChapter?.id || undefined,
+          level: createChapterLevel,
+          order: createChapterOrder,
+        },
+        token
+      );
+      setShowCreateChapterModal(false);
+      const refreshed = await fetchSeriesBySlug(series.slug);
+      setSeries(refreshed);
+    } catch (err: unknown) {
+      setCreateChapterError(err instanceof Error ? err.message : "Tạo thất bại");
+    } finally {
+      setIsCreatingChapter(false);
+      setOutlineActionLoading(null);
+    }
   };
 
   const handleOpenEditChapter = (ch: Chapter) => {
@@ -224,42 +226,43 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
     if (!token || !editingChapterId || !editChapterTitle.trim()) return;
     setIsUpdatingChapter(true);
     setEditChapterError("");
+    setOutlineActionLoading("Đang cập nhật mục...");
 
-    await withLoading(async () => {
-      try {
-        await updateChapter(
-          editingChapterId,
-          {
-            title: editChapterTitle.trim(),
-            description: editChapterDesc.trim() || undefined,
-            order: editChapterOrder,
-          },
-          token
-        );
-        setShowEditChapterModal(false);
-        const refreshed = await fetchSeriesBySlug(series.slug);
-        setSeries(refreshed);
-      } catch (err: unknown) {
-        setEditChapterError(err instanceof Error ? err.message : "Cập nhật thất bại");
-      } finally {
-        setIsUpdatingChapter(false);
-      }
-    }, "Đang lưu thay đổi...");
+    try {
+      await updateChapter(
+        editingChapterId,
+        {
+          title: editChapterTitle.trim(),
+          description: editChapterDesc.trim() || undefined,
+          order: editChapterOrder,
+        },
+        token
+      );
+      setShowEditChapterModal(false);
+      const refreshed = await fetchSeriesBySlug(series.slug);
+      setSeries(refreshed);
+    } catch (err: unknown) {
+      setEditChapterError(err instanceof Error ? err.message : "Cập nhật thất bại");
+    } finally {
+      setIsUpdatingChapter(false);
+      setOutlineActionLoading(null);
+    }
   };
 
   const handleDeleteChapter = async (chapterId: string, title: string) => {
     if (!token) return;
     if (!window.confirm(`Bạn có chắc chắn muốn xóa mục "${title}"?`)) return;
 
-    await withLoading(async () => {
-      try {
-        await deleteChapter(chapterId, token);
-        const refreshed = await fetchSeriesBySlug(series.slug);
-        setSeries(refreshed);
-      } catch (err: unknown) {
-        alert(err instanceof Error ? err.message : "Xóa thất bại");
-      }
-    }, "Đang xóa mục...");
+    setOutlineActionLoading("Đang xóa mục...");
+    try {
+      await deleteChapter(chapterId, token);
+      const refreshed = await fetchSeriesBySlug(series.slug);
+      setSeries(refreshed);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Xóa thất bại");
+    } finally {
+      setOutlineActionLoading(null);
+    }
   };
 
   // Find first lesson for the "Start Course" button
@@ -447,24 +450,30 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
               )}
             </div>
 
-            {flatList.length === 0 && (
-              <div className="text-center py-12 px-4 rounded-3xl border border-dashed border-stone-200 dark:border-stone-800 space-y-3">
-                <p className="text-sm text-stone-500">Khóa học này chưa có nội dung lộ trình nào.</p>
-                {canEditOutline && (
-                  <button
-                    type="button"
-                    onClick={() => handleOpenCreateChapter(1, undefined)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Tạo {levels[0]} đầu tiên</span>
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="relative min-h-[220px]">
+              <LoadingOverlay
+                isLoading={Boolean(outlineActionLoading)}
+                message={outlineActionLoading || "Đang tải đề cương..."}
+              />
 
-            <div className="space-y-4">
-              {flatList.map((chapter) => {
+              {flatList.length === 0 && (
+                <div className="text-center py-12 px-4 rounded-3xl border border-dashed border-stone-200 dark:border-stone-800 space-y-3">
+                  <p className="text-sm text-stone-500">Khóa học này chưa có nội dung lộ trình nào.</p>
+                  {canEditOutline && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCreateChapter(1, undefined)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Tạo {levels[0]} đầu tiên</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className={`space-y-4 transition-opacity duration-200 ${outlineActionLoading ? "opacity-40 pointer-events-none" : ""}`}>
+                {flatList.map((chapter) => {
                 const lvl = chapter.level || 1;
                 const lvlName = levels[lvl - 1] || `Cấp ${lvl}`;
                 const indentPx = Math.min((lvl - 1) * 20, 100);
@@ -604,6 +613,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                   </div>
                 );
               })}
+              </div>
             </div>
           </section>
         );

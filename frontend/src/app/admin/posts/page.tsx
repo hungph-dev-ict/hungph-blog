@@ -30,13 +30,12 @@ import { Category, PostListItem } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminGuard } from "@/components/admin/AdminGuard";
-import { useLoading } from "@/lib/loading-context";
 import { Pagination } from "@/components/common/Pagination";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 export default function AdminPostsPage() {
   const router = useRouter();
   const { user, token, isLoading } = useAuth();
-  const { withLoading } = useLoading();
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +64,7 @@ export default function AdminPostsPage() {
 
   // Concurrent action blocking states
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string>("");
 
   const isAdmin = user?.role === "admin" || user?.is_admin;
   const isProcessing = Boolean(actionLoadingId);
@@ -105,16 +105,16 @@ export default function AdminPostsPage() {
     if (!window.confirm(`Bạn có chắc muốn xóa bài viết "${title}" không?`)) return;
 
     setActionLoadingId(id);
-    await withLoading(async () => {
-      try {
-        await deletePost(id, token);
-        setPosts((prev) => prev.filter((p) => p.id !== id));
-      } catch (err: any) {
-        alert(`Lỗi khi xóa bài viết: ${err.message}`);
-      } finally {
-        setActionLoadingId(null);
-      }
-    }, "Đang xóa bài viết...");
+    setActionMessage("Đang xóa bài viết...");
+    try {
+      await deletePost(id, token);
+      setPosts((prev) => prev.filter((p) => p.id !== id));
+    } catch (err: any) {
+      alert(`Lỗi khi xóa bài viết: ${err.message}`);
+    } finally {
+      setActionLoadingId(null);
+      setActionMessage("");
+    }
   };
 
   // Handle Toggle Publish/Draft
@@ -126,26 +126,26 @@ export default function AdminPostsPage() {
     if (!window.confirm(`Bạn có muốn ${actionLabel} bài viết "${post.title}"?`)) return;
 
     setActionLoadingId(post.id);
-    await withLoading(async () => {
-      try {
-        const updated = await updatePost(
-          post.id,
-          {
-            title: post.title,
-            content_html: "", // Keep unchanged on backend if empty/optional
-            is_published: targetStatus,
-          },
-          token
-        );
-        setPosts((prev) =>
-          prev.map((p) => (p.id === post.id ? { ...p, is_published: updated.is_published } : p))
-        );
-      } catch (err: any) {
-        alert(`Lỗi khi ${actionLabel}: ${err.message}`);
-      } finally {
-        setActionLoadingId(null);
-      }
-    }, targetStatus ? "Đang xuất bản bài viết..." : "Đang chuyển bài viết về bản nháp...");
+    setActionMessage(targetStatus ? "Đang xuất bản bài viết..." : "Đang chuyển bài viết về bản nháp...");
+    try {
+      const updated = await updatePost(
+        post.id,
+        {
+          title: post.title,
+          content_html: "", // Keep unchanged on backend if empty/optional
+          is_published: targetStatus,
+        },
+        token
+      );
+      setPosts((prev) =>
+        prev.map((p) => (p.id === post.id ? { ...p, is_published: updated.is_published } : p))
+      );
+    } catch (err: any) {
+      alert(`Lỗi khi ${actionLabel}: ${err.message}`);
+    } finally {
+      setActionLoadingId(null);
+      setActionMessage("");
+    }
   };
 
   // Filter & Sort computation
@@ -427,50 +427,61 @@ export default function AdminPostsPage() {
         </div>
       </div>
 
-      {/* Post Table Section */}
-      {loading ? (
-        <div className="space-y-3 animate-pulse">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-16 rounded-xl bg-stone-100 dark:bg-stone-800" />
-          ))}
-        </div>
-      ) : filteredPosts.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3">
-          <FileText className="w-10 h-10 text-stone-400 mx-auto" />
-          <h3 className="font-semibold text-stone-800 dark:text-stone-200">
-            {posts.length === 0 ? "Chưa có bài viết nào" : "Không tìm thấy bài viết nào phù hợp"}
-          </h3>
-          <p className="text-sm text-stone-500">
-            {posts.length === 0
-              ? "Hãy bắt đầu viết bài đầu tiên của bạn!"
-              : "Thử thay đổi từ khóa tìm kiếm hoặc làm mới bộ lọc."}
-          </p>
-          {posts.length === 0 ? (
-            <Link
-              href="/editor/new"
-              className="inline-block mt-2 text-xs font-semibold px-4 py-2 rounded-lg bg-blue-600 text-white"
-            >
-              Tạo bài viết ngay
-            </Link>
-          ) : (
-            <button
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedStatus("all");
-                setSelectedCategory("");
-                setSortColumn("date");
-                setSortDirection("desc");
-              }}
-              className="inline-block mt-2 text-xs font-semibold px-4 py-2 rounded-lg border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
-            >
-              Đặt lại bộ lọc & sắp xếp
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden bg-white dark:bg-stone-900/60 shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+      {/* Post Table Section with Local Loading Overlay */}
+      <div className="relative min-h-[360px]">
+        <LoadingOverlay
+          isLoading={loading || isProcessing}
+          message={isProcessing ? actionMessage : "Đang tải danh sách bài viết..."}
+          rounded="rounded-2xl"
+        />
+
+        {loading && posts.length === 0 ? (
+          <div className="space-y-3 animate-pulse">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-16 rounded-xl bg-stone-100 dark:bg-stone-800" />
+            ))}
+          </div>
+        ) : filteredPosts.length === 0 ? (
+          <div className="text-center py-16 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3">
+            <FileText className="w-10 h-10 text-stone-400 mx-auto" />
+            <h3 className="font-semibold text-stone-800 dark:text-stone-200">
+              {posts.length === 0 ? "Chưa có bài viết nào" : "Không tìm thấy bài viết nào phù hợp"}
+            </h3>
+            <p className="text-sm text-stone-500">
+              {posts.length === 0
+                ? "Hãy bắt đầu viết bài đầu tiên của bạn!"
+                : "Thử thay đổi từ khóa tìm kiếm hoặc làm mới bộ lọc."}
+            </p>
+            {posts.length === 0 ? (
+              <Link
+                href="/editor/new"
+                className="inline-block mt-2 text-xs font-semibold px-4 py-2 rounded-lg bg-blue-600 text-white"
+              >
+                Tạo bài viết ngay
+              </Link>
+            ) : (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedStatus("all");
+                  setSelectedCategory("");
+                  setSortColumn("date");
+                  setSortDirection("desc");
+                }}
+                className="inline-block mt-2 text-xs font-semibold px-4 py-2 rounded-lg border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
+              >
+                Đặt lại bộ lọc & sắp xếp
+              </button>
+            )}
+          </div>
+        ) : (
+          <div
+            className={`border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden bg-white dark:bg-stone-900/60 shadow-sm transition-opacity duration-200 ${
+              loading || isProcessing ? "opacity-50 pointer-events-none" : "opacity-100"
+            }`}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
               <thead className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 text-stone-500 text-xs font-semibold uppercase">
                 <tr>
                   {renderSortHeader("title", "Tiêu đề bài viết")}
@@ -607,6 +618,7 @@ export default function AdminPostsPage() {
           )}
         </div>
       )}
+      </div>
     </div>
     </AdminGuard>
   );

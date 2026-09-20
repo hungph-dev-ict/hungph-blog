@@ -27,6 +27,7 @@ import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminGuard } from "@/components/admin/AdminGuard";
 import { useLoading } from "@/lib/loading-context";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 const STATUS_CONFIG = {
   pending: {
@@ -345,34 +346,37 @@ export default function AdminReportsPage() {
         </div>
 
         {/* Reports List */}
-        {loading ? (
-          <div className="space-y-3 animate-pulse">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-32 rounded-2xl bg-stone-100 dark:bg-stone-800" />
-            ))}
-          </div>
-        ) : filteredReports.length === 0 ? (
-          <div className="p-12 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl text-xs text-stone-400 bg-white dark:bg-stone-900/40 space-y-2">
-            <Flag className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-700" />
-            <p className="text-sm font-semibold text-stone-600 dark:text-stone-400">
-              {hasActiveFilter ? "Không tìm thấy báo cáo phù hợp với bộ lọc" : "Hiện chưa có báo cáo vi phạm nào"}
-            </p>
-            {hasActiveFilter && (
-              <button
-                onClick={() => {
-                  setStatusFilter("");
-                  setReasonFilter("");
-                  setSearchQuery("");
-                }}
-                className="text-xs text-blue-600 hover:underline font-semibold"
-              >
-                Đặt lại bộ lọc
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredReports.map((r) => {
+        <div className="relative min-h-[320px]">
+          <LoadingOverlay isLoading={loading} message="Đang tải danh sách báo cáo..." />
+
+          {loading && reports.length === 0 ? (
+            <div className="space-y-3 animate-pulse">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-32 rounded-2xl bg-stone-100 dark:bg-stone-800" />
+              ))}
+            </div>
+          ) : filteredReports.length === 0 ? (
+            <div className="p-12 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl text-xs text-stone-400 bg-white dark:bg-stone-900/40 space-y-2">
+              <Flag className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-700" />
+              <p className="text-sm font-semibold text-stone-600 dark:text-stone-400">
+                {hasActiveFilter ? "Không tìm thấy báo cáo phù hợp với bộ lọc" : "Hiện chưa có báo cáo vi phạm nào"}
+              </p>
+              {hasActiveFilter && (
+                <button
+                  onClick={() => {
+                    setStatusFilter("");
+                    setReasonFilter("");
+                    setSearchQuery("");
+                  }}
+                  className="text-xs text-blue-600 hover:underline font-semibold"
+                >
+                  Đặt lại bộ lọc
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className={`space-y-3 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
+              {filteredReports.map((r) => {
               const sc = STATUS_CONFIG[r.status] || STATUS_CONFIG.pending;
               const StatusIcon = sc.icon;
               const postHref = r.post_slug ? `/posts/${r.post_slug}` : `/posts/${r.post_id}`;
@@ -463,6 +467,7 @@ export default function AdminReportsPage() {
             })}
           </div>
         )}
+        </div>
 
         {/* Action Modal */}
         {selected && (

@@ -21,16 +21,16 @@ import { User } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminGuard } from "@/components/admin/AdminGuard";
-import { useLoading } from "@/lib/loading-context";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 export default function AdminUsersPage() {
   const router = useRouter();
   const { user: currentUser, token, isLoading } = useAuth();
-  const { withLoading } = useLoading();
 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string>("");
 
   const isAdmin = currentUser?.is_admin || currentUser?.role === "admin";
 
@@ -64,16 +64,16 @@ export default function AdminUsersPage() {
     if (!window.confirm(`Bạn có chắc muốn ${actionText}?`)) return;
 
     setActionLoading(targetUser.id);
-    await withLoading(async () => {
-      try {
-        await updateUserRole(targetUser.id, newRole, targetUser.is_active, token);
-        await loadUsers();
-      } catch (err: any) {
-        alert(`Lỗi: ${err.message}`);
-      } finally {
-        setActionLoading(null);
-      }
-    }, `Đang cập nhật quyền của "${targetUser.full_name || targetUser.email}"...`);
+    setActionMessage(`Đang cập nhật quyền của "${targetUser.full_name || targetUser.email}"...`);
+    try {
+      await updateUserRole(targetUser.id, newRole, targetUser.is_active, token);
+      await loadUsers();
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setActionLoading(null);
+      setActionMessage("");
+    }
   };
 
   const handleToggleActive = async (targetUser: User) => {
@@ -84,16 +84,16 @@ export default function AdminUsersPage() {
     if (!window.confirm(`Bạn có chắc muốn ${actionText} tài khoản này?`)) return;
 
     setActionLoading(targetUser.id);
-    await withLoading(async () => {
-      try {
-        await updateUserRole(targetUser.id, targetUser.role || "member", newActive, token);
-        await loadUsers();
-      } catch (err: any) {
-        alert(`Lỗi: ${err.message}`);
-      } finally {
-        setActionLoading(null);
-      }
-    }, `Đang ${actionText} tài khoản...`);
+    setActionMessage(`Đang ${actionText} tài khoản...`);
+    try {
+      await updateUserRole(targetUser.id, targetUser.role || "member", newActive, token);
+      await loadUsers();
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setActionLoading(null);
+      setActionMessage("");
+    }
   };
 
   const handleDelete = async (targetUser: User) => {
@@ -101,16 +101,16 @@ export default function AdminUsersPage() {
     if (!window.confirm(`Xóa vĩnh viễn tài khoản "${targetUser.email}"? Thao tác này không thể hoàn tác!`)) return;
 
     setActionLoading(targetUser.id);
-    await withLoading(async () => {
-      try {
-        await deleteUser(targetUser.id, token);
-        setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
-      } catch (err: any) {
-        alert(`Lỗi: ${err.message}`);
-      } finally {
-        setActionLoading(null);
-      }
-    }, `Đang xóa tài khoản "${targetUser.email}"...`);
+    setActionMessage(`Đang xóa tài khoản "${targetUser.email}"...`);
+    try {
+      await deleteUser(targetUser.id, token);
+      setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setActionLoading(null);
+      setActionMessage("");
+    }
   };
 
   const totalAdmins = users.filter((u) => u.role === "admin" || u.is_admin).length;
@@ -167,9 +167,15 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      {/* Users Table */}
-      <div className="rounded-3xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 overflow-hidden shadow-sm">
-        {loading ? (
+      {/* Users Table with Local Loading Overlay */}
+      <div className="relative rounded-3xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 overflow-hidden shadow-sm min-h-[300px]">
+        <LoadingOverlay
+          isLoading={loading || Boolean(actionLoading)}
+          message={actionLoading ? actionMessage : "Đang tải danh sách thành viên..."}
+          rounded="rounded-3xl"
+        />
+
+        {loading && users.length === 0 ? (
           <div className="p-8 space-y-4 animate-pulse">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-12 rounded-xl bg-stone-100 dark:bg-stone-800" />
@@ -180,7 +186,11 @@ export default function AdminUsersPage() {
             Chưa có thành viên nào khác trong hệ thống.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div
+            className={`overflow-x-auto transition-opacity duration-200 ${
+              loading || actionLoading ? "opacity-50 pointer-events-none" : "opacity-100"
+            }`}
+          >
             <table className="w-full text-left text-xs">
               <thead className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/40 text-stone-500 uppercase font-semibold">
                 <tr>

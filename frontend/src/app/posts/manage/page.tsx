@@ -27,8 +27,8 @@ import { useAuth } from "@/lib/auth-context";
 import { fetchPosts, deletePost, updatePost, fetchCategories } from "@/lib/api";
 import { Category, PostListItem } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
-import { useLoading } from "@/lib/loading-context";
 import { Pagination } from "@/components/common/Pagination";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 type SortColumn = "title" | "status" | "category" | "views" | "date";
 type SortDirection = "asc" | "desc";
@@ -36,7 +36,6 @@ type SortDirection = "asc" | "desc";
 export default function MemberPostsManagePage() {
   const router = useRouter();
   const { user, token, isLoading } = useAuth();
-  const { withLoading } = useLoading();
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +53,7 @@ export default function MemberPostsManagePage() {
 
   // Concurrent action blocking states
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string>("");
   const isProcessing = Boolean(actionLoadingId);
 
   // Auth check
@@ -99,16 +99,16 @@ export default function MemberPostsManagePage() {
     if (!window.confirm(`Bạn có chắc muốn xóa bài viết "${title}" không?`)) return;
 
     setActionLoadingId(id);
-    await withLoading(async () => {
-      try {
-        await deletePost(id, token);
-        setPosts((prev) => prev.filter((p) => p.id !== id));
-      } catch (err: any) {
-        alert(`Lỗi khi xóa bài viết: ${err.message}`);
-      } finally {
-        setActionLoadingId(null);
-      }
-    }, "Đang xóa bài viết...");
+    setActionMessage("Đang xóa bài viết...");
+    try {
+      await deletePost(id, token);
+      setPosts((prev) => prev.filter((p) => p.id !== id));
+    } catch (err: any) {
+      alert(`Lỗi khi xóa bài viết: ${err.message}`);
+    } finally {
+      setActionLoadingId(null);
+      setActionMessage("");
+    }
   };
 
   // Handle Toggle Publish/Draft
@@ -120,26 +120,26 @@ export default function MemberPostsManagePage() {
     if (!window.confirm(`Bạn có muốn ${actionLabel} bài viết "${post.title}"?`)) return;
 
     setActionLoadingId(post.id);
-    await withLoading(async () => {
-      try {
-        const updated = await updatePost(
-          post.id,
-          {
-            title: post.title,
-            content_html: "",
-            is_published: targetStatus,
-          },
-          token
-        );
-        setPosts((prev) =>
-          prev.map((p) => (p.id === post.id ? { ...p, is_published: updated.is_published } : p))
-        );
-      } catch (err: any) {
-        alert(`Lỗi khi ${actionLabel}: ${err.message}`);
-      } finally {
-        setActionLoadingId(null);
-      }
-    }, targetStatus ? "Đang xuất bản bài viết..." : "Đang chuyển bài viết về bản nháp...");
+    setActionMessage(targetStatus ? "Đang xuất bản bài viết..." : "Đang chuyển bài viết về bản nháp...");
+    try {
+      const updated = await updatePost(
+        post.id,
+        {
+          title: post.title,
+          content_html: "",
+          is_published: targetStatus,
+        },
+        token
+      );
+      setPosts((prev) =>
+        prev.map((p) => (p.id === post.id ? { ...p, is_published: updated.is_published } : p))
+      );
+    } catch (err: any) {
+      alert(`Lỗi khi ${actionLabel}: ${err.message}`);
+    } finally {
+      setActionLoadingId(null);
+      setActionMessage("");
+    }
   };
 
   // Sort handler
@@ -416,190 +416,196 @@ export default function MemberPostsManagePage() {
         </div>
       </div>
 
-      {/* Post Table Section */}
-      {loading ? (
-        <div className="space-y-3 animate-pulse">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-16 rounded-xl bg-stone-100 dark:bg-stone-800" />
-          ))}
-        </div>
-      ) : filteredPosts.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3">
-          <FileText className="w-10 h-10 text-stone-400 mx-auto" />
-          <h3 className="font-semibold text-stone-800 dark:text-stone-200">
-            {posts.length === 0 ? "Bạn chưa có bài viết nào" : "Không tìm thấy bài viết nào phù hợp"}
-          </h3>
-          <p className="text-sm text-stone-500">
-            {posts.length === 0
-              ? "Hãy bắt đầu chia sẻ kiến thức và viết bài đầu tiên của bạn!"
-              : "Thử thay đổi từ khóa tìm kiếm hoặc làm mới bộ lọc."}
-          </p>
-          {posts.length === 0 ? (
-            <Link
-              href="/editor/new"
-              className="inline-block mt-2 text-xs font-semibold px-4 py-2 rounded-lg bg-blue-600 text-white"
-            >
-              Tạo bài viết ngay
-            </Link>
-          ) : (
-            <button
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedStatus("all");
-                setSelectedCategory("");
-                setSortColumn("date");
-                setSortDirection("desc");
-              }}
-              className="inline-block mt-2 text-xs font-semibold px-4 py-2 rounded-lg border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
-            >
-              Đặt lại bộ lọc & sắp xếp
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden bg-white dark:bg-stone-900/60 shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 text-stone-500 text-xs font-semibold uppercase">
-                <tr>
-                  {renderSortHeader("title", "Tiêu đề bài viết")}
-                  {renderSortHeader("status", "Trạng thái")}
-                  {renderSortHeader("category", "Danh mục")}
-                  {renderSortHeader("views", "Lượt xem")}
-                  {renderSortHeader("date", "Thời gian")}
-                  <th className="py-3.5 px-4 text-right select-none font-semibold text-xs tracking-wider uppercase text-stone-500">
-                    Thao tác
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100 dark:divide-stone-800/60">
-                {paginatedPosts.map((post) => {
-                  const isItemLoading = actionLoadingId === post.id;
+      {/* Post Table Section with Local Loading Overlay */}
+      <div className="relative min-h-[360px]">
+        <LoadingOverlay
+          isLoading={loading || isProcessing}
+          message={isProcessing ? actionMessage : "Đang tải danh sách bài viết..."}
+          rounded="rounded-2xl"
+        />
 
-                  return (
-                    <tr
-                      key={post.id}
-                      className="hover:bg-stone-50/70 dark:hover:bg-stone-800/40 transition-colors"
-                    >
-                      <td className="py-4 px-4 font-semibold text-stone-900 dark:text-stone-100 max-w-xs truncate">
-                        <span title={post.title}>{post.title}</span>
-                      </td>
+        {loading && posts.length === 0 ? (
+          <div className="space-y-3 animate-pulse">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-16 rounded-xl bg-stone-100 dark:bg-stone-800" />
+            ))}
+          </div>
+        ) : filteredPosts.length === 0 ? (
+          <div className="text-center py-16 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3">
+            <FileText className="w-10 h-10 text-stone-400 mx-auto" />
+            <h3 className="font-semibold text-stone-800 dark:text-stone-200">
+              {posts.length === 0 ? "Bạn chưa có bài viết nào" : "Không tìm thấy bài viết nào phù hợp"}
+            </h3>
+            <p className="text-sm text-stone-500">
+              {posts.length === 0
+                ? "Hãy bắt đầu chia sẻ kiến thức và viết bài đầu tiên của bạn!"
+                : "Thử thay đổi từ khóa tìm kiếm hoặc làm mới bộ lọc."}
+            </p>
+            {posts.length === 0 ? (
+              <Link
+                href="/editor/new"
+                className="inline-block mt-2 text-xs font-semibold px-4 py-2 rounded-lg bg-blue-600 text-white"
+              >
+                Tạo bài viết ngay
+              </Link>
+            ) : (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedStatus("all");
+                  setSelectedCategory("");
+                  setSortColumn("date");
+                  setSortDirection("desc");
+                }}
+                className="inline-block mt-2 text-xs font-semibold px-4 py-2 rounded-lg border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
+              >
+                Đặt lại bộ lọc & sắp xếp
+              </button>
+            )}
+          </div>
+        ) : (
+          <div
+            className={`border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden bg-white dark:bg-stone-900/60 shadow-sm transition-opacity duration-200 ${
+              loading || isProcessing ? "opacity-50 pointer-events-none" : "opacity-100"
+            }`}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 text-stone-500 text-xs font-semibold uppercase">
+                  <tr>
+                    {renderSortHeader("title", "Tiêu đề bài viết")}
+                    {renderSortHeader("status", "Trạng thái")}
+                    {renderSortHeader("category", "Danh mục")}
+                    {renderSortHeader("views", "Lượt xem")}
+                    {renderSortHeader("date", "Thời gian")}
+                    <th className="py-3.5 px-4 text-right select-none font-semibold text-xs tracking-wider uppercase text-stone-500">
+                      Thao tác
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100 dark:divide-stone-800/60">
+                  {paginatedPosts.map((post) => {
+                    const isItemLoading = actionLoadingId === post.id;
 
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        <button
-                          disabled={isProcessing}
-                          onClick={() => handleTogglePublish(post)}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
-                            post.is_published
-                              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100"
-                              : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-100"
-                          } ${isItemLoading ? "opacity-50 pointer-events-none" : ""}`}
-                          title={`Nhấn để ${post.is_published ? "chuyển về nháp" : "xuất bản"}`}
-                        >
-                          {post.is_published ? (
-                            <>
-                              <CheckCircle className="w-3 h-3 text-emerald-600" />
-                              <span>Đã xuất bản</span>
-                            </>
-                          ) : (
-                            <>
-                              <AlertCircle className="w-3 h-3 text-amber-600" />
-                              <span>Bản nháp</span>
-                            </>
-                          )}
-                        </button>
-                      </td>
+                    return (
+                      <tr
+                        key={post.id}
+                        className="hover:bg-stone-50/70 dark:hover:bg-stone-800/40 transition-colors"
+                      >
+                        <td className="py-4 px-4 font-semibold text-stone-900 dark:text-stone-100 max-w-xs truncate">
+                          <span title={post.title}>{post.title}</span>
+                        </td>
 
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        {post.category ? (
-                          <span className="text-xs px-2.5 py-1 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-medium">
-                            {post.category.name}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-stone-400 italic">Chưa phân loại</span>
-                        )}
-                      </td>
-
-                      <td className="py-4 px-4 text-stone-600 dark:text-stone-400 text-xs whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 font-mono">
-                          <Eye className="w-3.5 h-3.5 text-stone-400" />
-                          <span>{post.views_count || 0}</span>
-                        </div>
-                      </td>
-
-                      <td className="py-4 px-4 text-stone-500 text-xs whitespace-nowrap font-mono">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-stone-400" />
-                          <span>
-                            {new Date(post.published_at || post.created_at).toLocaleDateString("vi-VN")}
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="py-4 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* Sửa bài viết */}
-                          <Link
-                            href={`/editor/${post.id}`}
-                            className={`p-2 rounded-lg text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
-                              isProcessing ? "pointer-events-none opacity-50" : ""
-                            }`}
-                            title="Chỉnh sửa bài viết"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Link>
-
-                          {/* Xem bài viết công khai */}
-                          {post.is_published && (
-                            <Link
-                              href={`/posts/${post.slug}`}
-                              target="_blank"
-                              className={`p-2 rounded-lg text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
-                                isProcessing ? "pointer-events-none opacity-50" : ""
-                              }`}
-                              title="Xem bài viết công khai"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </Link>
-                          )}
-
-                          {/* Xóa bài viết */}
+                        <td className="py-4 px-4 whitespace-nowrap">
                           <button
+                            type="button"
                             disabled={isProcessing}
-                            onClick={() => handleDelete(post.id, post.title)}
-                            className="p-2 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors disabled:opacity-40"
-                            title="Xóa bài viết"
+                            onClick={() => handleTogglePublish(post)}
+                            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full transition-all ${
+                              post.is_published
+                                ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 hover:bg-emerald-100"
+                                : "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60 hover:bg-amber-100"
+                            } ${isProcessing ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                           >
                             {isItemLoading ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
+                              <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                            ) : post.is_published ? (
+                              <CheckCircle className="w-3 h-3" />
                             ) : (
-                              <Trash2 className="w-4 h-4" />
+                              <AlertCircle className="w-3 h-3" />
                             )}
+                            <span>{post.is_published ? "Đã xuất bản" : "Bản nháp"}</span>
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </td>
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="p-4 border-t border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/30">
-              <Pagination
-                currentPage={validPage}
-                totalPages={totalPages}
-                totalItems={totalPosts}
-                itemsName="bài viết"
-                onPageChange={(p) => setCurrentPage(p)}
-                disabled={isProcessing}
-              />
+                        <td className="py-4 px-4 whitespace-nowrap text-stone-600 dark:text-stone-400 text-xs">
+                          {post.category ? (
+                            <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800">
+                              {post.category.name}
+                            </span>
+                          ) : (
+                            <span className="text-stone-400 italic">Chưa phân loại</span>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-4 whitespace-nowrap text-xs text-stone-500">
+                          <div className="flex items-center gap-1">
+                            <Eye className="w-3.5 h-3.5 text-stone-400" />
+                            <span>{post.views_count?.toLocaleString() || 0}</span>
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-4 whitespace-nowrap text-xs text-stone-500">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-stone-400" />
+                            <span>
+                              {new Date(post.published_at || post.created_at).toLocaleDateString("vi-VN")}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-4 whitespace-nowrap text-right text-xs">
+                          <div className="flex items-center justify-end gap-1">
+                            {post.is_published && (
+                              <Link
+                                href={`/posts/${post.slug}`}
+                                target="_blank"
+                                className={`p-1.5 rounded-lg text-stone-400 hover:text-blue-600 transition-colors ${
+                                  isProcessing ? "pointer-events-none opacity-40" : ""
+                                }`}
+                                title="Xem bài viết trên trang"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </Link>
+                            )}
+
+                            <Link
+                              href={`/editor/${post.id}`}
+                              className={`p-1.5 rounded-lg text-stone-400 hover:text-stone-900 dark:hover:text-white transition-colors ${
+                                isProcessing ? "pointer-events-none opacity-40" : ""
+                              }`}
+                              title="Chỉnh sửa bài viết"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Link>
+
+                            <button
+                              onClick={() => handleDelete(post.id, post.title)}
+                              disabled={isProcessing}
+                              className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              title="Xóa bài viết"
+                            >
+                              {isItemLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/30">
+                <Pagination
+                  currentPage={validPage}
+                  totalPages={totalPages}
+                  totalItems={totalPosts}
+                  itemsName="bài viết"
+                  onPageChange={(p) => setCurrentPage(p)}
+                  disabled={isProcessing}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

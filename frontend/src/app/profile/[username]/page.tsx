@@ -9,12 +9,12 @@ import { UserProfile, FollowStatus, PostListItem } from "@/lib/types";
 import { Users, UserCheck, Calendar, BookOpen, Plus, FileText, ArrowLeft } from "lucide-react";
 import { PostCard } from "@/components/blog/PostCard";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 import Link from "next/link";
 
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>();
   const { user, token } = useAuth();
-  const { withLoading } = useLoading();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
   const [posts, setPosts] = useState<PostListItem[]>([]);
@@ -50,17 +50,14 @@ export default function ProfilePage() {
   const handleFollow = async () => {
     if (!token || !profile) return;
     setFollowLoading(true);
-    const isCurrentlyFollowing = followStatus?.is_following;
-    await withLoading(async () => {
-      try {
-        const result = await toggleFollow(profile.id, token);
-        setFollowStatus(result);
-      } catch (e: unknown) {
-        alert(e instanceof Error ? e.message : "Lỗi không xác định");
-      } finally {
-        setFollowLoading(false);
-      }
-    }, isCurrentlyFollowing ? "Đang hủy theo dõi..." : "Đang gửi theo dõi...");
+    try {
+      const result = await toggleFollow(profile.id, token);
+      setFollowStatus(result);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Lỗi không xác định");
+    } finally {
+      setFollowLoading(false);
+    }
   };
 
   if (loading) {
@@ -250,38 +247,42 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {posts.length === 0 ? (
-          <div className="text-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3 bg-stone-50/40 dark:bg-stone-900/30">
-            <div className="w-12 h-12 mx-auto rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400">
-              <BookOpen className="w-6 h-6" />
-            </div>
-            <h3 className="font-semibold text-stone-800 dark:text-stone-200">
-              Chưa có bài viết nào
-            </h3>
-            <p className="text-sm text-stone-500 dark:text-stone-400 max-w-sm mx-auto">
-              {isOwnProfile
-                ? "Bạn chưa xuất bản bài viết nào. Hãy bấm viết bài để chia sẻ kiến thức đầu tiên của bạn!"
-                : "Tác giả này hiện chưa xuất bản bài viết nào."}
-            </p>
-            {isOwnProfile && (
-              <div className="pt-2">
-                <Link
-                  href="/editor/new"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Tạo bài viết đầu tiên</span>
-                </Link>
+        <div className="relative min-h-[220px]">
+          <LoadingOverlay isLoading={loading} message="Đang tải bài viết của tác giả..." />
+
+          {posts.length === 0 ? (
+            <div className="text-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3 bg-stone-50/40 dark:bg-stone-900/30">
+              <div className="w-12 h-12 mx-auto rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400">
+                <BookOpen className="w-6 h-6" />
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-5">
-            {posts.map((post) => (
-              <PostCard key={post.id} post={post} />
-            ))}
-          </div>
-        )}
+              <h3 className="font-semibold text-stone-800 dark:text-stone-200">
+                Chưa có bài viết nào
+              </h3>
+              <p className="text-sm text-stone-500 dark:text-stone-400 max-w-sm mx-auto">
+                {isOwnProfile
+                  ? "Bạn chưa xuất bản bài viết nào. Hãy bấm viết bài để chia sẻ kiến thức đầu tiên của bạn!"
+                  : "Tác giả này hiện chưa xuất bản bài viết nào."}
+              </p>
+              {isOwnProfile && (
+                <div className="pt-2">
+                  <Link
+                    href="/editor/new"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tạo bài viết đầu tiên</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className={`grid grid-cols-1 gap-5 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
+              {posts.map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

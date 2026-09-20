@@ -7,6 +7,7 @@ import { Notification } from "@/lib/types";
 import { Bell, CheckCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 const NOTIF_ICONS: Record<string, string> = {
   collab_request: "🤝",
@@ -81,64 +82,68 @@ export default function NotificationsPage() {
         )}
       </div>
 
-      {loading ? (
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-20 bg-stone-100 dark:bg-stone-800 rounded-2xl animate-pulse" />
-          ))}
-        </div>
-      ) : notifications.length === 0 ? (
-        <div className="text-center py-16 text-stone-400">
-          <Bell className="w-12 h-12 mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">Chưa có thông báo nào</p>
-          <p className="text-sm mt-1">Các thông báo sẽ xuất hiện ở đây khi có hoạt động mới</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {notifications.map((n) => (
-            <div
-              key={n.id}
-              onClick={() => !n.is_read && handleMarkRead(n.id)}
-              className={`flex items-start gap-4 p-4 rounded-2xl border transition-all cursor-pointer hover:shadow-sm ${
-                !n.is_read
-                  ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900"
-                  : "bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800"
-              }`}
-            >
-              <span className="text-2xl shrink-0 mt-0.5">{NOTIF_ICONS[n.type] || "🔔"}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
-                    {NOTIF_LABELS[n.type] || n.type}
-                  </span>
-                  {!n.is_read && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />}
-                </div>
-                <p className="text-sm text-stone-800 dark:text-stone-200 leading-relaxed">{n.message}</p>
-                {n.target_id && n.target_type === "series" && (
-                  <Link
-                    href={
-                      n.type === "collab_request"
-                        ? (user?.is_admin || user?.role === "admin"
-                            ? `/admin/series?id=${n.target_id}&tab=collaborators`
-                            : `/series?id=${n.target_id}&tab=collaborators`)
-                        : `/series?id=${n.target_id}`
-                    }
-                    className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-1.5 inline-flex items-center gap-1"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <span>
-                      {n.type === "collab_request"
-                        ? "Xem và phê duyệt yêu cầu cộng tác →"
-                        : "Xem khóa học →"}
+      <div className="relative min-h-[220px]">
+        <LoadingOverlay isLoading={loading} message="Đang tải thông báo..." />
+
+        {loading && notifications.length === 0 ? (
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-20 bg-stone-100 dark:bg-stone-800 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="text-center py-16 text-stone-400">
+            <Bell className="w-12 h-12 mx-auto mb-4 opacity-30" />
+            <p className="text-lg font-medium">Chưa có thông báo nào</p>
+            <p className="text-sm mt-1">Các thông báo sẽ xuất hiện ở đây khi có hoạt động mới</p>
+          </div>
+        ) : (
+          <div className={`space-y-2 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
+            {notifications.map((n) => (
+              <div
+                key={n.id}
+                onClick={() => !n.is_read && handleMarkRead(n.id)}
+                className={`flex items-start gap-4 p-4 rounded-2xl border transition-all cursor-pointer hover:shadow-sm ${
+                  !n.is_read
+                    ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900"
+                    : "bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800"
+                }`}
+              >
+                <span className="text-2xl shrink-0 mt-0.5">{NOTIF_ICONS[n.type] || "🔔"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
+                      {NOTIF_LABELS[n.type] || n.type}
                     </span>
-                  </Link>
-                )}
-                <p className="text-xs text-stone-400 mt-1">{new Date(n.created_at).toLocaleString("vi-VN")}</p>
+                    {!n.is_read && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />}
+                  </div>
+                  <p className="text-sm text-stone-800 dark:text-stone-200 leading-relaxed">{n.message}</p>
+                  {n.target_id && n.target_type === "series" && (
+                    <Link
+                      href={
+                        n.type === "collab_request"
+                          ? (user?.is_admin || user?.role === "admin"
+                              ? `/admin/series?id=${n.target_id}&tab=collaborators`
+                              : `/series?id=${n.target_id}&tab=collaborators`)
+                          : `/series?id=${n.target_id}`
+                      }
+                      className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-1.5 inline-flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span>
+                        {n.type === "collab_request"
+                          ? "Xem và phê duyệt yêu cầu cộng tác →"
+                          : "Xem khóa học →"}
+                      </span>
+                    </Link>
+                  )}
+                  <p className="text-xs text-stone-400 mt-1">{new Date(n.created_at).toLocaleString("vi-VN")}</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

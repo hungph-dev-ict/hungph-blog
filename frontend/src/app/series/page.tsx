@@ -6,6 +6,7 @@ import { GraduationCap, BookOpen, Layers, ArrowRight, Clock } from "lucide-react
 import { fetchSeries, getFullImageUrl } from "@/lib/api";
 import { Series } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 export default function SeriesListPage() {
   const [seriesList, setSeriesList] = useState<Series[]>([]);
@@ -37,20 +38,23 @@ export default function SeriesListPage() {
       </div>
 
       {/* Series Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-64 rounded-3xl bg-stone-100 dark:bg-stone-800" />
-          ))}
-        </div>
-      ) : seriesList.length === 0 ? (
-        <div className="p-16 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3">
-          <BookOpen className="w-12 h-12 mx-auto text-stone-400" />
-          <h3 className="font-bold text-stone-800 dark:text-stone-200">Chưa có khóa học nào được xuất bản</h3>
-          <p className="text-xs text-stone-500">Hãy đón chờ những series tiếp theo nhé!</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="relative min-h-[360px]">
+        <LoadingOverlay isLoading={loading} message="Đang tải danh sách khóa học & series..." />
+
+        {loading && seriesList.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-64 rounded-3xl bg-stone-100 dark:bg-stone-800" />
+            ))}
+          </div>
+        ) : seriesList.length === 0 ? (
+          <div className="p-16 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3">
+            <BookOpen className="w-12 h-12 mx-auto text-stone-400" />
+            <h3 className="font-bold text-stone-800 dark:text-stone-200">Chưa có khóa học nào được xuất bản</h3>
+            <p className="text-xs text-stone-500">Hãy đón chờ những series tiếp theo nhé!</p>
+          </div>
+        ) : (
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
           {seriesList.map((series) => (
             <div
               key={series.id}
@@ -119,8 +123,9 @@ export default function SeriesListPage() {
               </div>
             </div>
           ))}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

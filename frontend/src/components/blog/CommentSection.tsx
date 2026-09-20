@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { fetchComments, createComment, deleteComment, updateComment } from "@/lib/api";
 import { Comment } from "@/lib/types";
 import { GoogleLoginButton } from "@/components/common/GoogleLoginButton";
-import { useLoading } from "@/lib/loading-context";
+import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
 interface CommentSectionProps {
   postId: string;
@@ -14,10 +14,10 @@ interface CommentSectionProps {
 
 export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
   const { user, token, logout } = useAuth();
-  const { withLoading } = useLoading();
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Form state
   const [content, setContent] = useState("");
@@ -58,45 +58,46 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
     }
 
     setSubmitting(true);
-    await withLoading(async () => {
-      try {
-        await createComment(
-          postId,
-          {
-            content: commentText,
-            author_name: user?.full_name || user?.username || authorName.trim() || undefined,
-            author_email: user?.email || authorEmail.trim() || undefined,
-            parent_id: parentId,
-          },
-          token
-        );
+    setActionLoading("Đang gửi bình luận...");
+    try {
+      await createComment(
+        postId,
+        {
+          content: commentText,
+          author_name: user?.full_name || user?.username || authorName.trim() || undefined,
+          author_email: user?.email || authorEmail.trim() || undefined,
+          parent_id: parentId,
+        },
+        token
+      );
 
-        if (parentId) {
-          setReplyContent("");
-          setReplyToId(null);
-        } else {
-          setContent("");
-        }
-        await loadComments();
-      } catch (err: any) {
-        alert(`Lỗi: ${err.message}`);
-      } finally {
-        setSubmitting(false);
+      if (parentId) {
+        setReplyContent("");
+        setReplyToId(null);
+      } else {
+        setContent("");
       }
-    }, "Đang gửi bình luận...");
+      await loadComments();
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+      setActionLoading(null);
+    }
   };
 
   const handleDelete = async (commentId: string) => {
     if (!token) return;
     if (!window.confirm("Bạn có chắc muốn thu hồi bình luận này?")) return;
-    await withLoading(async () => {
-      try {
-        await deleteComment(commentId, token);
-        await loadComments();
-      } catch (err: any) {
-        alert(`Lỗi: ${err.message}`);
-      }
-    }, "Đang xóa bình luận...");
+    setActionLoading("Đang xóa bình luận...");
+    try {
+      await deleteComment(commentId, token);
+      await loadComments();
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleStartEdit = (c: Comment) => {
@@ -112,18 +113,18 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
   const handleSaveEdit = async (commentId: string) => {
     if (!token || !editContent.trim()) return;
     setEditSubmitting(true);
-    await withLoading(async () => {
-      try {
-        await updateComment(commentId, editContent.trim(), token);
-        setEditingId(null);
-        setEditContent("");
-        await loadComments();
-      } catch (err: any) {
-        alert(`Lỗi khi cập nhật bình luận: ${err.message}`);
-      } finally {
-        setEditSubmitting(false);
-      }
-    }, "Đang lưu bình luận...");
+    setActionLoading("Đang lưu bình luận...");
+    try {
+      await updateComment(commentId, editContent.trim(), token);
+      setEditingId(null);
+      setEditContent("");
+      await loadComments();
+    } catch (err: any) {
+      alert(`Lỗi khi cập nhật bình luận: ${err.message}`);
+    } finally {
+      setEditSubmitting(false);
+      setActionLoading(null);
+    }
   };
 
   const canModify = (c: Comment) => {
@@ -232,8 +233,13 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
       </form>
 
       {/* Comments List */}
-      <div className="space-y-4">
-        {loading ? (
+      <div className="relative min-h-[160px]">
+        <LoadingOverlay
+          isLoading={loading || Boolean(actionLoading)}
+          message={actionLoading || "Đang tải bình luận..."}
+        />
+
+        {loading && comments.length === 0 ? (
           <div className="space-y-3 animate-pulse">
             {[1, 2].map((i) => (
               <div key={i} className="h-20 rounded-2xl bg-stone-100 dark:bg-stone-800" />
@@ -244,7 +250,12 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
             Chưa có bình luận nào. Hãy là người đầu tiên chia sẻ suy nghĩ!
           </div>
         ) : (
-          comments.map((comment) => (
+          <div
+            className={`space-y-4 transition-opacity duration-200 ${
+              loading || actionLoading ? "opacity-40 pointer-events-none" : ""
+            }`}
+          >
+            {comments.map((comment) => (
             <div
               key={comment.id}
               className="p-4 sm:p-5 rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900/60 space-y-3 shadow-sm"
@@ -457,7 +468,8 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
                 </div>
               )}
             </div>
-          ))
+          ))}
+          </div>
         )}
       </div>
     </section>
