@@ -16,6 +16,7 @@ import {
   Upload,
   Image as ImageIcon,
   Loader2,
+  Users,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -31,6 +32,7 @@ import {
   fetchUsers,
   getFullImageUrl,
   uploadMedia,
+  getCollaborators,
 } from "@/lib/api";
 import { Category, Chapter, Series, SeriesDetail, User } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
@@ -39,12 +41,14 @@ import { AdminGuard } from "@/components/admin/AdminGuard";
 import { HierarchyConfigEditor } from "@/components/series/HierarchyConfigEditor";
 import { ChapterNode, buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
 import { useLoading } from "@/lib/loading-context";
+import { SeriesCollaboratorsManager } from "@/components/series/SeriesCollaboratorsManager";
 
 function AdminSeriesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const slugParam = searchParams.get("slug");
   const idParam = searchParams.get("id");
+  const tabParam = searchParams.get("tab");
   const { user, token, isLoading } = useAuth();
   const { withLoading } = useLoading();
 
@@ -52,6 +56,10 @@ function AdminSeriesContent() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [inspectorTab, setInspectorTab] = useState<"outline" | "collaborators">(
+    tabParam === "collaborators" || tabParam === "collab" ? "collaborators" : "outline"
+  );
+  const [pendingCollabCounts, setPendingCollabCounts] = useState<Record<string, number>>({});
 
   // New Series form
   const [showNewSeriesModal, setShowNewSeriesModal] = useState(false);
@@ -140,6 +148,28 @@ function AdminSeriesContent() {
     }
   }, [user, isLoading, router]);
 
+  useEffect(() => {
+    if (tabParam === "collaborators" || tabParam === "collab") {
+      setInspectorTab("collaborators");
+    }
+  }, [tabParam]);
+
+  const loadPendingCounts = async (list: Series[], tok: string) => {
+    const counts: Record<string, number> = {};
+    await Promise.all(
+      list.map(async (s) => {
+        try {
+          const collabs = await getCollaborators(s.id, tok);
+          const p = collabs.filter((c) => c.status === "pending").length;
+          if (p > 0) counts[s.id] = p;
+        } catch (e) {
+          // ignore
+        }
+      })
+    );
+    setPendingCollabCounts(counts);
+  };
+
   const loadData = async (targetSlug?: string | null) => {
     setLoading(true);
     try {
@@ -153,6 +183,10 @@ function AdminSeriesContent() {
       setCategories(cData);
       if (uData && uData.length > 0) {
         setUsers(uData);
+      }
+
+      if (token) {
+        loadPendingCounts(sData, token);
       }
 
       // Xác định khóa học cần chọn từ query parameters ngay khi load xong dữ liệu
@@ -838,13 +872,19 @@ function AdminSeriesContent() {
                       </div>
 
                       <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
                             {s.total_chapters} chương • {s.total_lessons} bài học
                           </span>
                           {!s.is_published && (
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
                               Bản nháp
+                            </span>
+                          )}
+                          {pendingCollabCounts[s.id] > 0 && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white animate-pulse flex items-center gap-1">
+                              <Users className="w-2.5 h-2.5" />
+                              <span>{pendingCollabCounts[s.id]} chờ duyệt</span>
                             </span>
                           )}
                         </div>
@@ -867,6 +907,20 @@ function AdminSeriesContent() {
                       </div>
 
                       <div className="flex flex-col gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => {
+                            inspectSeries(s.slug);
+                            setInspectorTab("collaborators");
+                          }}
+                          className={`p-1 transition-colors ${
+                            pendingCollabCounts[s.id] > 0
+                              ? "text-amber-600 hover:text-amber-700 animate-pulse"
+                              : "text-stone-400 hover:text-blue-600"
+                          }`}
+                          title="Quản lý cộng tác viên & phê duyệt"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={() => openEditSeriesModal(s)}
                           className="p-1 text-stone-400 hover:text-amber-600 transition-colors"
@@ -946,106 +1000,153 @@ function AdminSeriesContent() {
                 </div>
               )}
 
-              {/* Multi-level Chapter / Section Add Section */}
-              {(() => {
-                let levels = ["Chương"];
-                try {
-                  if (selectedDetail.hierarchy_config) {
-                    const parsed = JSON.parse(selectedDetail.hierarchy_config);
-                    if (Array.isArray(parsed) && parsed.length > 0) levels = parsed;
-                  }
-                } catch (e) {}
+              {/* Tab Switcher: Outline vs Collaborators */}
+              <div className="flex items-center gap-2 border-b border-stone-200 dark:border-stone-800 pb-3">
+                <button
+                  type="button"
+                  onClick={() => setInspectorTab("outline")}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                    inspectorTab === "outline"
+                      ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20"
+                      : "text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800"
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Dàn bài &amp; Các chương ({selectedDetail.chapters?.length || 0})</span>
+                </button>
 
-                const tree = buildChapterTree(selectedDetail.chapters || [], levels);
-                const flatList = flattenChapterTree(tree);
+                <button
+                  type="button"
+                  onClick={() => setInspectorTab("collaborators")}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                    inspectorTab === "collaborators"
+                      ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20"
+                      : "text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800"
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Cộng tác viên &amp; Phê duyệt</span>
+                  {pendingCollabCounts[selectedDetail.id] > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
+                      {pendingCollabCounts[selectedDetail.id]} chờ duyệt
+                    </span>
+                  )}
+                </button>
+              </div>
 
-                // Parent node selected (if any)
-                const parentNode = flatList.find((n) => n.id === newChapterParentId);
-                const targetLevelIdx = parentNode ? (parentNode.level || 1) : 0;
-                const targetLevelName = levels[targetLevelIdx] || `Cấp ${targetLevelIdx + 1}`;
+              {inspectorTab === "collaborators" ? (
+                <SeriesCollaboratorsManager
+                  seriesId={selectedDetail.id}
+                  seriesTitle={selectedDetail.title}
+                  token={token || ""}
+                  users={users}
+                  onCountChange={(pending) => {
+                    setPendingCollabCounts((prev) => ({ ...prev, [selectedDetail.id]: pending }));
+                  }}
+                />
+              ) : (
+                <>
+                  {/* Multi-level Chapter / Section Add Section */}
+                  {(() => {
+                    let levels = ["Chương"];
+                    try {
+                      if (selectedDetail.hierarchy_config) {
+                        const parsed = JSON.parse(selectedDetail.hierarchy_config);
+                        if (Array.isArray(parsed) && parsed.length > 0) levels = parsed;
+                      }
+                    } catch (e) {}
 
-                return (
-                  <div className="space-y-4 pt-2 border-t border-stone-100 dark:border-stone-800">
-                    <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700/80">
-                      <div className="flex items-center justify-between text-xs font-semibold text-stone-700 dark:text-stone-300">
-                        <span className="flex items-center gap-1.5">
-                          <Plus className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Thêm mục mới vào dàn bài học:</span>
-                        </span>
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold">
-                          Cấp {targetLevelIdx + 1}: {targetLevelName}
-                        </span>
-                      </div>
+                    const tree = buildChapterTree(selectedDetail.chapters || [], levels);
+                    const flatList = flattenChapterTree(tree);
 
-                      {levels.length > 1 && (
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-medium text-stone-500">
-                            Vị trí phân cấp (Chọn mục cha):
-                          </label>
-                          <select
-                            value={newChapterParentId}
-                            onChange={(e) => setNewChapterParentId(e.target.value)}
-                            className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-medium"
-                          >
-                            <option value="">+ Tạo {levels[0]} mới (Cấp 1 - Gốc)</option>
-                            {flatList
-                              .filter((ch) => (ch.level || 1) < levels.length)
-                              .map((ch) => {
-                                const nextLvl = (ch.level || 1) + 1;
-                                const nextName = levels[nextLvl - 1] || `Cấp ${nextLvl}`;
-                                const indent = "— ".repeat((ch.level || 1) - 1);
-                                return (
-                                  <option key={ch.id} value={ch.id}>
-                                    {indent}↳ Thêm [{nextName}] vào: {ch.displayNumber} - {ch.title}
-                                  </option>
-                                );
-                              })}
-                          </select>
+                    // Parent node selected (if any)
+                    const parentNode = flatList.find((n) => n.id === newChapterParentId);
+                    const targetLevelIdx = parentNode ? (parentNode.level || 1) : 0;
+                    const targetLevelName = levels[targetLevelIdx] || `Cấp ${targetLevelIdx + 1}`;
+
+                    return (
+                      <div className="space-y-4 pt-2 border-t border-stone-100 dark:border-stone-800">
+                        <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700/80">
+                          <div className="flex items-center justify-between text-xs font-semibold text-stone-700 dark:text-stone-300">
+                            <span className="flex items-center gap-1.5">
+                              <Plus className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Thêm mục mới vào dàn bài học:</span>
+                            </span>
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold">
+                              Cấp {targetLevelIdx + 1}: {targetLevelName}
+                            </span>
+                          </div>
+
+                          {levels.length > 1 && (
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-medium text-stone-500">
+                                Vị trí phân cấp (Chọn mục cha):
+                              </label>
+                              <select
+                                value={newChapterParentId}
+                                onChange={(e) => setNewChapterParentId(e.target.value)}
+                                className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-medium"
+                              >
+                                <option value="">+ Tạo {levels[0]} mới (Cấp 1 - Gốc)</option>
+                                {flatList
+                                  .filter((ch) => (ch.level || 1) < levels.length)
+                                  .map((ch) => {
+                                    const nextLvl = (ch.level || 1) + 1;
+                                    const nextName = levels[nextLvl - 1] || `Cấp ${nextLvl}`;
+                                    const indent = "— ".repeat((ch.level || 1) - 1);
+                                    return (
+                                      <option key={ch.id} value={ch.id}>
+                                        {indent}↳ Thêm [{nextName}] vào: {ch.displayNumber} - {ch.title}
+                                      </option>
+                                    );
+                                  })}
+                              </select>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={newChapterTitle}
+                              onChange={(e) => setNewChapterTitle(e.target.value)}
+                              placeholder={`Tiêu đề ${targetLevelName} mới (Ví dụ: ${targetLevelName} 1: Giới thiệu)...`}
+                              className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleAddChapter(selectedDetail.id)}
+                              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shrink-0 shadow-xs"
+                            >
+                              Thêm {targetLevelName}
+                            </button>
+                          </div>
                         </div>
-                      )}
 
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={newChapterTitle}
-                          onChange={(e) => setNewChapterTitle(e.target.value)}
-                          placeholder={`Tiêu đề ${targetLevelName} mới (Ví dụ: ${targetLevelName} 1: Giới thiệu)...`}
-                          className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleAddChapter(selectedDetail.id)}
-                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shrink-0 shadow-xs"
-                        >
-                          Thêm {targetLevelName}
-                        </button>
-                      </div>
-                    </div>
+                        {/* Chapters Tree List */}
+                        <div className="space-y-2.5 pt-1">
+                          {flatList.length > 0 ? (
+                            flatList.map((ch) => {
+                              const lvl = ch.level || 1;
+                              const lvlName = levels[lvl - 1] || `Cấp ${lvl}`;
+                              const indentPx = Math.min((lvl - 1) * 20, 100);
 
-                    {/* Chapters Tree List */}
-                    <div className="space-y-2.5 pt-1">
-                      {flatList.length > 0 ? (
-                        flatList.map((ch) => {
-                          const lvl = ch.level || 1;
-                          const lvlName = levels[lvl - 1] || `Cấp ${lvl}`;
+                              const borderColors = [
+                                "border-blue-400 dark:border-blue-600",
+                                "border-indigo-400 dark:border-indigo-600",
+                                "border-purple-400 dark:border-purple-600",
+                                "border-amber-400 dark:border-amber-600",
+                                "border-emerald-400 dark:border-emerald-600",
+                              ];
+                              const bgColors = [
+                                "bg-white dark:bg-stone-900/40",
+                                "bg-blue-50/20 dark:bg-blue-950/10",
+                                "bg-indigo-50/20 dark:bg-indigo-950/10",
+                                "bg-purple-50/20 dark:bg-purple-950/10",
+                                "bg-emerald-50/20 dark:bg-emerald-950/10",
+                              ];
+                              const colorIdx = Math.min(lvl - 1, borderColors.length - 1);
+
                           const isLeaf = lvl === levels.length;
-                          const indentPx = Math.min((lvl - 1) * 20, 100);
-
-                          const borderColors = [
-                            "border-blue-400 dark:border-blue-600",
-                            "border-indigo-400 dark:border-indigo-600",
-                            "border-purple-400 dark:border-purple-600",
-                            "border-amber-400 dark:border-amber-600",
-                            "border-emerald-400 dark:border-emerald-600",
-                          ];
-                          const bgColors = [
-                            "bg-white dark:bg-stone-900/60",
-                            "bg-blue-50/20 dark:bg-blue-950/10",
-                            "bg-indigo-50/20 dark:bg-indigo-950/10",
-                            "bg-purple-50/20 dark:bg-purple-950/10",
-                            "bg-emerald-50/20 dark:bg-emerald-950/10",
-                          ];
-                          const colorIdx = Math.min(lvl - 1, borderColors.length - 1);
 
                           return (
                             <div
@@ -1182,6 +1283,8 @@ function AdminSeriesContent() {
                   </div>
                 );
               })()}
+                </>
+              )}
             </div>
           ) : (
             <div className="p-12 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl text-xs text-stone-400">

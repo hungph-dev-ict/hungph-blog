@@ -704,22 +704,47 @@ export async function getCollaborators(seriesId: string, token: string): Promise
   return res.json();
 }
 
+export async function addCollaboratorDirect(
+  seriesId: string,
+  userId: string,
+  token: string
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/blog/series/${seriesId}/collaborators`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify({ user_id: userId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Thêm cộng tác viên thất bại");
+  }
+}
+
 export async function updateCollaborator(
   seriesId: string,
   userId: string,
   status: "accepted" | "rejected",
   token: string
 ): Promise<void> {
-  await fetch(`${API_BASE_URL}/blog/series/${seriesId}/collaborators/${userId}`, {
+  const res = await fetch(`${API_BASE_URL}/blog/series/${seriesId}/collaborators/${userId}`, {
     method: "PUT",
     headers: getHeaders(token),
     body: JSON.stringify({ status }),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Cập nhật cộng tác viên thất bại");
+  }
 }
 
 export async function removeCollaborator(seriesId: string, userId: string, token: string): Promise<void> {
-  await fetch(`${API_BASE_URL}/blog/series/${seriesId}/collaborators/${userId}`, {
+  const res = await fetch(`${API_BASE_URL}/blog/series/${seriesId}/collaborators/${userId}`, {
     method: "DELETE",
     headers: getHeaders(token),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Xóa cộng tác viên thất bại");
+  }
 }
+

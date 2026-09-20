@@ -1407,6 +1407,9 @@ class CollabRequestCreate(PydanticBase):
 class CollabStatusUpdate(PydanticBase):
     status: str  # accepted | rejected
 
+class AddCollaboratorDirect(PydanticBase):
+    user_id: str
+
 
 @router.post("/series/{series_id}/request-collaboration", status_code=201)
 async def request_collaboration(
@@ -1448,11 +1451,10 @@ async def request_collaboration(
         )
         db.add(collab)
 
-    await db.commit()
+    actor_name = current_user.full_name or current_user.username
 
     # Notify series owner
     if series.owner_id:
-        actor_name = current_user.full_name or current_user.username
         notif = Notification(
             user_id=series.owner_id,
             actor_id=current_user.id,
@@ -1462,8 +1464,21 @@ async def request_collaboration(
             message=f"{actor_name} muốn cộng tác khoá học '{series.title}'",
         )
         db.add(notif)
-        await db.commit()
 
+    # Also notify admins if owner is not admin or if series has no owner
+    admin_users = (await db.execute(select(User).where((User.is_admin == True) | (User.role == "admin")))).scalars().all()
+    for adm in admin_users:
+        if adm.id != current_user.id and adm.id != series.owner_id:
+            db.add(Notification(
+                user_id=adm.id,
+                actor_id=current_user.id,
+                type="collab_request",
+                target_id=series_id,
+                target_type="series",
+                message=f"[Quản trị] {actor_name} gửi yêu cầu cộng tác khoá học '{series.title}'",
+            ))
+
+    await db.commit()
     return {"ok": True, "message": "Yêu cầu đã được gửi"}
 
 
@@ -1479,9 +1494,10 @@ async def get_collaborators(
     if not series:
         raise HTTPException(status_code=404, detail="Khoá học không tồn tại")
 
+    is_admin = current_user.is_admin or getattr(current_user, "role", "") == "admin"
     is_owner = series.owner_id == current_user.id
-    if not current_user.is_admin and not is_owner:
-        raise HTTPException(status_code=403, detail="Chỉ chủ khoá học mới xem được")
+    if not is_admin and not is_owner:
+        raise HTTPException(status_code=403, detail="Chỉ chủ khoá học hoặc Quản trị viên mới xem được")
 
     collabs_stmt = select(SeriesCollaborator).where(SeriesCollaborator.series_id == series_id)
     collabs = (await db.execute(collabs_stmt)).scalars().all()
@@ -1503,6 +1519,59 @@ async def get_collaborators(
     return result
 
 
+@router.post("/series/{series_id}/collaborators", status_code=201)
+async def add_collaborator_direct(
+    series_id: str,
+    body: AddCollaboratorDirect,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin hoặc chủ khoá học trực tiếp thêm cộng tác viên."""
+    series = (await db.execute(select(Series).where(Series.id == series_id))).scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Khoá học không tồn tại")
+
+    is_admin = current_user.is_admin or getattr(current_user, "role", "") == "admin"
+    is_owner = series.owner_id == current_user.id
+    if not is_admin and not is_owner:
+        raise HTTPException(status_code=403, detail="Chỉ chủ khoá học hoặc Quản trị viên mới thực hiện được")
+
+    target_user = await db.get(User, body.user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Không tìm thấy người dùng này")
+
+    existing = (await db.execute(
+        select(SeriesCollaborator).where(
+            SeriesCollaborator.series_id == series_id,
+            SeriesCollaborator.user_id == body.user_id
+        )
+    )).scalar_one_or_none()
+
+    if existing:
+        existing.status = "accepted"
+    else:
+        collab = SeriesCollaborator(
+            series_id=series_id,
+            user_id=body.user_id,
+            status="accepted",
+            message="Được thêm trực tiếp bởi quản trị viên / tác giả",
+        )
+        db.add(collab)
+
+    notif = Notification(
+        user_id=body.user_id,
+        actor_id=current_user.id,
+        type="collab_accepted",
+        target_id=series_id,
+        target_type="series",
+        message=f"Bạn đã được cấp quyền cộng tác viên cho khoá học '{series.title}'!",
+    )
+    db.add(notif)
+    await db.commit()
+
+    return {"ok": True, "message": "Đã thêm cộng tác viên thành công"}
+
+
 @router.put("/series/{series_id}/collaborators/{user_id}")
 async def update_collaborator(
     series_id: str,
@@ -1519,9 +1588,10 @@ async def update_collaborator(
     if not series:
         raise HTTPException(status_code=404, detail="Khoá học không tồn tại")
 
+    is_admin = current_user.is_admin or getattr(current_user, "role", "") == "admin"
     is_owner = series.owner_id == current_user.id
-    if not current_user.is_admin and not is_owner:
-        raise HTTPException(status_code=403, detail="Chỉ chủ khoá học mới thực hiện được")
+    if not is_admin and not is_owner:
+        raise HTTPException(status_code=403, detail="Chỉ chủ khoá học hoặc Quản trị viên mới thực hiện được")
 
     collab = (await db.execute(
         select(SeriesCollaborator).where(
@@ -1566,8 +1636,9 @@ async def remove_collaborator(
     series = (await db.execute(select(Series).where(Series.id == series_id))).scalar_one_or_none()
     if not series:
         raise HTTPException(status_code=404)
+    is_admin = current_user.is_admin or getattr(current_user, "role", "") == "admin"
     is_owner = series.owner_id == current_user.id
-    if not current_user.is_admin and not is_owner:
+    if not is_admin and not is_owner:
         raise HTTPException(status_code=403)
     collab = (await db.execute(
         select(SeriesCollaborator).where(

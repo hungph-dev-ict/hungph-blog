@@ -22,6 +22,7 @@ import { buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
 
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { useLoading } from "@/lib/loading-context";
+import { SeriesCollaboratorsManager } from "@/components/series/SeriesCollaboratorsManager";
 
 interface SeriesDetailClientProps {
   initialSeries: SeriesDetail;
@@ -32,26 +33,42 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
   const { user, token } = useAuth();
   const { withLoading } = useLoading();
   const [showCollabModal, setShowCollabModal] = useState(false);
+  const [showManageCollabModal, setShowManageCollabModal] = useState(false);
+  const [pendingCollabCount, setPendingCollabCount] = useState(0);
   const [collabMessage, setCollabMessage] = useState("");
   const [collabSubmitting, setCollabSubmitting] = useState(false);
   const [collabSuccess, setCollabSuccess] = useState(false);
   const [collabError, setCollabError] = useState("");
   const [isAlreadyCollaborator, setIsAlreadyCollaborator] = useState(false);
 
-  // Check if current user is already a collaborator
+  const isAuthor = Boolean(user && series.author?.id && user.id === series.author.id);
+  const isAdmin = Boolean(user && (user.is_admin || user.role === "admin"));
+  const canManageCollab = isAuthor || isAdmin;
+  const showCollabButton = !canManageCollab && !isAlreadyCollaborator;
+
+  // Check if current user is already a collaborator and get pending count
   useEffect(() => {
     if (!user || !token) return;
     getCollaborators(series.id, token)
       .then((collabs) => {
-        setIsAlreadyCollaborator(collabs.some((c) => c.user_id === user.id));
+        setIsAlreadyCollaborator(collabs.some((c) => c.user_id === user.id && c.status === "accepted"));
+        const pending = collabs.filter((c) => c.status === "pending").length;
+        setPendingCollabCount(pending);
       })
       .catch(() => {
         // ignore – non-critical
       });
   }, [user, token, series.id]);
 
-  const isAuthor = Boolean(user && series.author?.id && user.id === series.author.id);
-  const showCollabButton = !isAuthor && !isAlreadyCollaborator;
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if ((tab === "collaborators" || tab === "collab") && canManageCollab) {
+        setShowManageCollabModal(true);
+      }
+    }
+  }, [canManageCollab]);
 
   const handleCollabSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,6 +157,20 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                   <Play className="w-4 h-4 fill-white" />
                   <span>Bắt đầu học (Bài 1: {firstLesson.title})</span>
                 </Link>
+              )}
+              {canManageCollab && (
+                <button
+                  onClick={() => setShowManageCollabModal(true)}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-200 font-semibold text-sm transition-all border border-amber-300 dark:border-amber-800 hover:scale-[1.02] shadow-xs"
+                >
+                  <Users className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <span>Quản lý Cộng tác viên</span>
+                  {pendingCollabCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
+                      {pendingCollabCount} chờ duyệt
+                    </span>
+                  )}
+                </button>
               )}
               {showCollabButton && (
                 <button
@@ -419,6 +450,22 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
           </div>
         </div>
       )}
+
+      {/* Modal Quản Lý Cộng Tác Viên (Dành cho Tác giả & Admin) */}
+      {showManageCollabModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-stone-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-stone-200 dark:border-stone-800 max-h-[90vh] overflow-y-auto">
+            <SeriesCollaboratorsManager
+              seriesId={series.id}
+              seriesTitle={series.title}
+              token={token || ""}
+              onCountChange={(pending) => setPendingCollabCount(pending)}
+              onClose={() => setShowManageCollabModal(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

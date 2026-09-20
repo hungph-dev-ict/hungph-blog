@@ -115,8 +115,22 @@ export default function NotificationsPage() {
                 </div>
                 <p className="text-sm text-stone-800 dark:text-stone-200 leading-relaxed">{n.message}</p>
                 {n.target_id && n.target_type === "series" && (
-                  <Link href="/series" className="text-xs text-blue-600 hover:underline mt-1 inline-block" onClick={(e) => e.stopPropagation()}>
-                    Xem khóa học →
+                  <Link
+                    href={
+                      n.type === "collab_request"
+                        ? (user?.is_admin || user?.role === "admin"
+                            ? `/admin/series?id=${n.target_id}&tab=collaborators`
+                            : `/series?id=${n.target_id}&tab=collaborators`)
+                        : `/series?id=${n.target_id}`
+                    }
+                    className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-1.5 inline-flex items-center gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span>
+                      {n.type === "collab_request"
+                        ? "Xem và phê duyệt yêu cầu cộng tác →"
+                        : "Xem khóa học →"}
+                    </span>
                   </Link>
                 )}
                 <p className="text-xs text-stone-400 mt-1">{new Date(n.created_at).toLocaleString("vi-VN")}</p>

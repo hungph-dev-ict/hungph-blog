@@ -16,7 +16,7 @@ import {
   Flag,
 } from "lucide-react";
 import { GoogleLoginButton } from "./GoogleLoginButton";
-import { getUnreadCount, getNotifications, markAllNotificationsRead } from "@/lib/api";
+import { getUnreadCount, getNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api";
 import { Notification } from "@/lib/types";
 
 const NOTIF_ICONS: Record<string, string> = {
@@ -91,6 +91,21 @@ export const Header: React.FC = () => {
           setUnreadCount(0);
         }
       } catch {}
+    }
+  };
+
+  const handleNotificationClick = (n: Notification) => {
+    setShowNotifs(false);
+    if (n.type === "collab_request" && n.target_id) {
+      if (user?.is_admin || user?.role === "admin") {
+        router.push(`/admin/series?id=${n.target_id}&tab=collaborators`);
+      } else {
+        router.push(`/series?id=${n.target_id}&tab=collaborators`);
+      }
+    } else if (n.type === "collab_accepted" && n.target_id) {
+      router.push(`/series?id=${n.target_id}`);
+    } else if (n.type === "new_post" && n.target_id) {
+      router.push(`/posts/${n.target_id}`);
     }
   };
 
@@ -208,20 +223,28 @@ export const Header: React.FC = () => {
                       {notifications.map((n) => (
                         <li
                           key={n.id}
-                          className={`px-4 py-3 flex items-start gap-3 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors cursor-default ${
+                          onClick={() => handleNotificationClick(n)}
+                          className={`px-4 py-3 flex items-start gap-3 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors cursor-pointer ${
                             !n.is_read ? "bg-blue-50/50 dark:bg-blue-950/20" : ""
                           }`}
                         >
                           <span className="text-xl mt-0.5 shrink-0">{NOTIF_ICONS[n.type] || "🔔"}</span>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="text-sm text-stone-800 dark:text-stone-200 leading-snug">
                               {n.message}
                             </p>
-                            <p className="text-[11px] text-stone-400 mt-0.5">
-                              {new Date(n.created_at).toLocaleDateString("vi-VN", {
-                                day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
-                              })}
-                            </p>
+                            <div className="flex items-center justify-between mt-1">
+                              <p className="text-[11px] text-stone-400">
+                                {new Date(n.created_at).toLocaleDateString("vi-VN", {
+                                  day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+                                })}
+                              </p>
+                              {n.type === "collab_request" && (
+                                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                                  Xem &amp; duyệt →
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </li>
                       ))}
