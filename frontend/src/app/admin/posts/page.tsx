@@ -16,6 +16,8 @@ import {
   Search,
   Filter,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -42,7 +44,19 @@ export default function AdminPostsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "published" | "draft">("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "views" | "title">("newest");
+  type SortColumn = "title" | "author" | "status" | "category" | "views" | "date";
+  type SortDirection = "asc" | "desc";
+  const [sortColumn, setSortColumn] = useState<SortColumn>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(column);
+      setSortDirection(column === "date" || column === "views" ? "desc" : "asc");
+    }
+  };
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -164,30 +178,52 @@ export default function AdminPostsPage() {
 
     // Sort
     return [...result].sort((a, b) => {
-      if (sortBy === "newest") {
-        const dateA = new Date(a.published_at || a.created_at).getTime();
-        const dateB = new Date(b.published_at || b.created_at).getTime();
-        return dateB - dateA;
+      let comparison = 0;
+      switch (sortColumn) {
+        case "title":
+          comparison = a.title.localeCompare(b.title, "vi");
+          break;
+        case "author": {
+          const authorA = a.author?.full_name || a.author?.username || "";
+          const authorB = b.author?.full_name || b.author?.username || "";
+          comparison = authorA.localeCompare(authorB, "vi");
+          break;
+        }
+        case "status": {
+          const statusA = a.is_published ? 1 : 0;
+          const statusB = b.is_published ? 1 : 0;
+          comparison = statusA - statusB;
+          break;
+        }
+        case "category": {
+          const catA = a.category?.name || "";
+          const catB = b.category?.name || "";
+          comparison = catA.localeCompare(catB, "vi");
+          break;
+        }
+        case "views": {
+          const viewsA = a.views_count || 0;
+          const viewsB = b.views_count || 0;
+          comparison = viewsA - viewsB;
+          break;
+        }
+        case "date": {
+          const dateA = new Date(a.published_at || a.created_at).getTime();
+          const dateB = new Date(b.published_at || b.created_at).getTime();
+          comparison = dateA - dateB;
+          break;
+        }
+        default:
+          comparison = 0;
       }
-      if (sortBy === "oldest") {
-        const dateA = new Date(a.published_at || a.created_at).getTime();
-        const dateB = new Date(b.published_at || b.created_at).getTime();
-        return dateA - dateB;
-      }
-      if (sortBy === "views") {
-        return (b.views_count || 0) - (a.views_count || 0);
-      }
-      if (sortBy === "title") {
-        return a.title.localeCompare(b.title, "vi");
-      }
-      return 0;
+      return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [posts, isAdmin, user, searchQuery, selectedStatus, selectedCategory, sortBy]);
+  }, [posts, isAdmin, user, searchQuery, selectedStatus, selectedCategory, sortColumn, sortDirection]);
 
-  // Reset page when filters change
+  // Reset page when filters or sorting change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedStatus, selectedCategory, sortBy]);
+  }, [searchQuery, selectedStatus, selectedCategory, sortColumn, sortDirection]);
 
   // Pagination slice
   const totalPosts = filteredPosts.length;
@@ -201,6 +237,57 @@ export default function AdminPostsPage() {
 
   const startPost = totalPosts === 0 ? 0 : (validPage - 1) * pageSize + 1;
   const endPost = Math.min(validPage * pageSize, totalPosts);
+
+  const renderSortHeader = (
+    column: SortColumn,
+    label: string,
+    align: "left" | "right" = "left"
+  ) => {
+    const isActive = sortColumn === column;
+    return (
+      <th
+        key={column}
+        onClick={() => handleSort(column)}
+        className={`py-3.5 px-4 cursor-pointer select-none group transition-colors hover:bg-stone-100 dark:hover:bg-stone-800 ${
+          align === "right" ? "text-right" : "text-left"
+        }`}
+        title={`Sắp xếp theo ${label} (${
+          isActive
+            ? sortDirection === "asc"
+              ? "Tăng dần (Bấm để giảm dần)"
+              : "Giảm dần (Bấm để tăng dần)"
+            : "Bấm để sắp xếp"
+        })`}
+      >
+        <div
+          className={`inline-flex items-center gap-1.5 font-semibold text-xs tracking-wider uppercase transition-colors ${
+            isActive
+              ? "text-blue-600 dark:text-blue-400"
+              : "text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
+          } ${align === "right" ? "flex-row-reverse" : ""}`}
+        >
+          <span>{label}</span>
+          <span
+            className={`p-0.5 rounded transition-all ${
+              isActive
+                ? "bg-blue-100/70 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400"
+                : "text-stone-400 opacity-50 group-hover:opacity-100"
+            }`}
+          >
+            {isActive ? (
+              sortDirection === "asc" ? (
+                <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
+              ) : (
+                <ArrowDown className="w-3.5 h-3.5 stroke-[2.5]" />
+              )
+            ) : (
+              <ArrowUpDown className="w-3.5 h-3.5" />
+            )}
+          </span>
+        </div>
+      </th>
+    );
+  };
 
   return (
     <AdminGuard requireAdmin={false}>
@@ -252,11 +339,11 @@ export default function AdminPostsPage() {
         />
       </div>
 
-      {/* Search, Filter & Sort Controls Bar */}
+      {/* Search & Filter Controls Bar */}
       <div className="p-4 rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/40 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
           {/* Search Box */}
-          <div className="lg:col-span-5 relative">
+          <div className="lg:col-span-6 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
             <input
               type="text"
@@ -291,7 +378,7 @@ export default function AdminPostsPage() {
           </div>
 
           {/* Category Filter */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <select
               disabled={isProcessing}
               value={selectedCategory}
@@ -306,21 +393,6 @@ export default function AdminPostsPage() {
               ))}
             </select>
           </div>
-
-          {/* Sort By */}
-          <div className="lg:col-span-2">
-            <select
-              disabled={isProcessing}
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
-            >
-              <option value="newest">Mới nhất</option>
-              <option value="oldest">Cũ nhất</option>
-              <option value="views">Lượt xem nhiều</option>
-              <option value="title">Tiêu đề (A–Z)</option>
-            </select>
-          </div>
         </div>
 
         {/* Results summary and Active Filters count */}
@@ -329,17 +401,18 @@ export default function AdminPostsPage() {
             <span>
               {totalPosts === 0 ? "Không có bài viết phù hợp" : `Hiển thị ${startPost}–${endPost} / ${totalPosts} bài viết`}
             </span>
-            {(searchQuery || selectedStatus !== "all" || selectedCategory) && (
+            {(searchQuery || selectedStatus !== "all" || selectedCategory || sortColumn !== "date" || sortDirection !== "desc") && (
               <button
                 onClick={() => {
                   setSearchQuery("");
                   setSelectedStatus("all");
                   setSelectedCategory("");
-                  setSortBy("newest");
+                  setSortColumn("date");
+                  setSortDirection("desc");
                 }}
                 className="text-blue-600 hover:underline font-medium text-[11px]"
               >
-                Xóa bộ lọc
+                Xóa bộ lọc & sắp xếp
               </button>
             )}
           </div>
@@ -384,10 +457,12 @@ export default function AdminPostsPage() {
                 setSearchQuery("");
                 setSelectedStatus("all");
                 setSelectedCategory("");
+                setSortColumn("date");
+                setSortDirection("desc");
               }}
               className="inline-block mt-2 text-xs font-semibold px-4 py-2 rounded-lg border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
             >
-              Đặt lại bộ lọc
+              Đặt lại bộ lọc & sắp xếp
             </button>
           )}
         </div>
@@ -397,13 +472,15 @@ export default function AdminPostsPage() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 text-stone-500 text-xs font-semibold uppercase">
                 <tr>
-                  <th className="py-3.5 px-4">Tiêu đề bài viết</th>
-                  {isAdmin && <th className="py-3.5 px-4">Tác giả</th>}
-                  <th className="py-3.5 px-4">Trạng thái</th>
-                  <th className="py-3.5 px-4">Danh mục</th>
-                  <th className="py-3.5 px-4">Lượt xem</th>
-                  <th className="py-3.5 px-4">Thời gian</th>
-                  <th className="py-3.5 px-4 text-right">Thao tác</th>
+                  {renderSortHeader("title", "Tiêu đề bài viết")}
+                  {isAdmin && renderSortHeader("author", "Tác giả")}
+                  {renderSortHeader("status", "Trạng thái")}
+                  {renderSortHeader("category", "Danh mục")}
+                  {renderSortHeader("views", "Lượt xem")}
+                  {renderSortHeader("date", "Thời gian")}
+                  <th className="py-3.5 px-4 text-right select-none font-semibold text-xs tracking-wider uppercase text-stone-500">
+                    Thao tác
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800/60">
