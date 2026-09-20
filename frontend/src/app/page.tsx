@@ -1,11 +1,20 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Search, Sparkles, Tag as TagIcon, Layers, PenLine, GraduationCap, ArrowRight, BookOpen } from "lucide-react";
+import { Search, Sparkles, Tag as TagIcon, Layers, PenLine, GraduationCap, ArrowRight, BookOpen, Clock, User as UserIcon } from "lucide-react";
 import Link from "next/link";
-import { fetchCategories, fetchPosts, fetchLatestSeries, getFullCourseImageUrl } from "@/lib/api";
+import { fetchCategories, fetchPosts, fetchLatestSeries, getFullCourseImageUrl, getFullImageUrl } from "@/lib/api";
 import { Category, PaginatedPosts, Series } from "@/lib/types";
 import { PostCard } from "@/components/blog/PostCard";
+
+function formatCourseDuration(minutes?: number) {
+  if (!minutes || minutes <= 0) return null;
+  if (minutes < 60) return `${minutes} phút đọc`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMins = minutes % 60;
+  if (remainingMins === 0) return `${hours} giờ đọc`;
+  return `${hours} giờ ${remainingMins}p đọc`;
+}
 
 export default function HomePage() {
   const [postsData, setPostsData] = useState<PaginatedPosts | null>(null);
@@ -133,11 +142,46 @@ export default function HomePage() {
                   {latestSeries.summary}
                 </p>
               )}
-              <div className="flex items-center gap-3 mt-1">
-                <span className="text-[11px] text-stone-400 flex items-center gap-1">
-                  <BookOpen className="w-3 h-3" />
-                  {latestSeries.total_chapters} chương • {latestSeries.total_lessons} bài
+              {/* Meta info: Author • Chapters & Lessons • Reading duration */}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+                {/* Author */}
+                {(latestSeries.author?.full_name || latestSeries.author?.username) && (
+                  <>
+                    <span className="inline-flex items-center gap-1.5 font-medium text-stone-700 dark:text-stone-300">
+                      {latestSeries.author?.avatar_url ? (
+                        <img
+                          src={getFullImageUrl(latestSeries.author.avatar_url)}
+                          alt={latestSeries.author.full_name || latestSeries.author.username}
+                          className="w-4 h-4 rounded-full object-cover border border-stone-200 dark:border-stone-700"
+                        />
+                      ) : (
+                        <UserIcon className="w-3.5 h-3.5 text-blue-500" />
+                      )}
+                      <span>
+                        {latestSeries.author?.full_name || latestSeries.author?.username}
+                      </span>
+                    </span>
+
+                    <span className="text-stone-300 dark:text-stone-700">•</span>
+                  </>
+                )}
+
+                {/* Chapters & Lessons */}
+                <span className="inline-flex items-center gap-1">
+                  <BookOpen className="w-3.5 h-3.5 text-stone-400" />
+                  <span>{latestSeries.total_chapters} chương • {latestSeries.total_lessons} bài</span>
                 </span>
+
+                {/* Reading Duration */}
+                {formatCourseDuration(latestSeries.total_reading_time_minutes) && (
+                  <>
+                    <span className="text-stone-300 dark:text-stone-700">•</span>
+                    <span className="inline-flex items-center gap-1" title="Tổng thời lượng đọc">
+                      <Clock className="w-3.5 h-3.5 text-stone-400" />
+                      <span>{formatCourseDuration(latestSeries.total_reading_time_minutes)}</span>
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -212,8 +256,13 @@ export default function HomePage() {
             </span>
           </div>
           {postsData && (
-            <span className="text-xs text-stone-400">
-              Tổng số: {postsData.total} bài
+            <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
+              {postsData.total === 0
+                ? "0 bài viết"
+                : `${(postsData.page - 1) * postsData.limit + 1}–${Math.min(
+                    postsData.page * postsData.limit,
+                    postsData.total
+                  )} / ${postsData.total} bài viết`}
             </span>
           )}
         </div>

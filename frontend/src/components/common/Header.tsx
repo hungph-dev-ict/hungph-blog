@@ -112,15 +112,15 @@ export const Header: React.FC = () => {
     <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 dark:bg-stone-900/80 border-b border-stone-200 dark:border-stone-800 transition-colors">
       <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl overflow-hidden shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
+        <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group shrink-0" title="HungPH. Blog">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
             <img src="/logo.jpg" alt="HungPH Blog Logo" className="w-full h-full object-cover" />
           </div>
-          <div className="flex flex-col">
-            <span className="font-bold text-lg tracking-tight text-stone-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+          <div className="hidden sm:flex flex-col">
+            <span className="font-bold text-base sm:text-lg tracking-tight text-stone-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
               HungPH<span className="text-blue-600">.</span>
             </span>
-            <span className="text-[11px] text-stone-500 dark:text-stone-400 font-medium -mt-1">
+            <span className="hidden md:block text-[11px] text-stone-500 dark:text-stone-400 font-medium -mt-1">
               Tech &amp; Thoughts
             </span>
           </div>
@@ -154,12 +154,12 @@ export const Header: React.FC = () => {
         </nav>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Theme Switcher */}
           <button
             onClick={toggleTheme}
             aria-label="Toggle theme"
-            className="p-2 rounded-lg text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            className="p-1.5 sm:p-2 rounded-lg text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
           >
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -170,11 +170,11 @@ export const Header: React.FC = () => {
               <button
                 onClick={handleOpenNotifs}
                 aria-label="Thông báo"
-                className="relative p-2 rounded-lg text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                className="relative p-1.5 sm:p-2 rounded-lg text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none">
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-3.5 px-0.5 flex items-center justify-center rounded-full bg-rose-500 text-white text-[9px] font-bold leading-none">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
@@ -182,7 +182,7 @@ export const Header: React.FC = () => {
 
               {/* Notification Dropdown */}
               {showNotifs && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-2xl shadow-xl shadow-black/10 overflow-hidden z-50">
+                <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-2xl shadow-xl shadow-black/10 overflow-hidden z-50">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 dark:border-stone-800">
                     <span className="font-semibold text-stone-900 dark:text-white text-sm">Thông báo</span>
                     <Link
@@ -228,38 +228,38 @@ export const Header: React.FC = () => {
 
           {/* User Authentication & Role Actions */}
           {user ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Link
                 href="/admin/editor/new"
-                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm shadow-blue-500/20"
+                className="hidden md:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm shadow-blue-500/20"
               >
                 <PenTool className="w-3.5 h-3.5" />
                 <span>Viết bài</span>
               </Link>
 
-              {/* Profile & Role Badge */}
+              {/* Profile & Role Badge - Avatar only on small mobile */}
               <Link
                 href={`/profile/${user.username}`}
-                title="Xem trang cá nhân"
-                className="flex items-center gap-2 bg-stone-100 dark:bg-stone-800/80 pl-2 pr-3 py-1 rounded-full text-xs hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors"
+                title={`Trang cá nhân: ${user.full_name || user.username}`}
+                className="flex items-center sm:gap-2 bg-stone-100 dark:bg-stone-800/80 p-0.5 sm:pl-2 sm:pr-3 sm:py-1 rounded-full text-xs hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors shrink-0"
               >
                 {user.avatar_url ? (
-                  <img src={user.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                  <img src={user.avatar_url} alt="" className="w-7 h-7 sm:w-6 sm:h-6 rounded-full object-cover ring-1 ring-stone-200 dark:ring-stone-700" />
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-[11px]">
+                  <div className="w-7 h-7 sm:w-6 sm:h-6 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-[11px]">
                     {user.full_name?.charAt(0) || user.username?.charAt(0) || "U"}
                   </div>
                 )}
-                <span className="font-semibold text-stone-900 dark:text-white max-w-[90px] sm:max-w-[120px] truncate">
+                <span className="hidden sm:inline font-semibold text-stone-900 dark:text-white max-w-[90px] sm:max-w-[120px] truncate">
                   {user.full_name || user.username}
                 </span>
 
                 {isAdmin ? (
-                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                  <span className="hidden sm:inline text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                     Admin
                   </span>
                 ) : (
-                  <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300">
+                  <span className="hidden md:inline text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300">
                     Thành viên
                   </span>
                 )}
@@ -267,23 +267,23 @@ export const Header: React.FC = () => {
 
               <Link
                 href="/admin/posts"
-                className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                className="text-xs font-semibold px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shrink-0"
               >
-                {isAdmin ? "Quản trị" : "Bài của tôi"}
+                {isAdmin ? "Quản trị" : "Bài viết"}
               </Link>
 
               {isAdmin && (
                 <>
                   <Link
                     href="/admin/users"
-                    className="hidden md:inline-flex text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800/80 bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition-colors"
+                    className="hidden lg:inline-flex text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800/80 bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition-colors"
                   >
                     Thành viên
                   </Link>
                   <Link
                     href="/admin/reports"
                     title="Tố cáo"
-                    className="hidden md:inline-flex p-1.5 rounded-lg text-stone-400 hover:text-rose-600 transition-colors"
+                    className="hidden lg:inline-flex p-1.5 rounded-lg text-stone-400 hover:text-rose-600 transition-colors"
                   >
                     <Flag className="w-4 h-4" />
                   </Link>
@@ -293,7 +293,7 @@ export const Header: React.FC = () => {
               <button
                 onClick={logout}
                 title="Đăng xuất"
-                className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg text-stone-400 hover:text-rose-600 transition-colors shrink-0"
               >
                 <LogOut className="w-4 h-4" />
               </button>

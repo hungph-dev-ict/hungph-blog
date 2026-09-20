@@ -22,6 +22,7 @@ import {
 } from "@/lib/api";
 import { Category } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { AdminNav } from "@/components/admin/AdminNav";
 
 export default function AdminCategoriesPage() {
   const router = useRouter();
@@ -146,12 +147,7 @@ export default function AdminCategoriesPage() {
           </div>
         </div>
 
-        <Link
-          href="/admin/posts"
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
-        >
-          Quản lý bài viết
-        </Link>
+        <AdminNav currentTab="categories" disabled={submitting} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">

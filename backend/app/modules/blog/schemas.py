@@ -131,13 +131,24 @@ class SeriesUpdate(BaseModel):
     attribution_text: Optional[str] = None
 
 
+class SeriesBrief(BaseModel):
+    id: str
+    title: str
+    slug: str
+
+    class Config:
+        from_attributes = True
+
+
 class SeriesResponse(SeriesBase):
     id: str
     slug: str
     created_at: datetime
     category: Optional[CategoryResponse] = None
+    author: Optional[AuthorBrief] = None
     total_chapters: int = 0
     total_lessons: int = 0
+    total_reading_time_minutes: int = 0
 
     class Config:
         from_attributes = True
@@ -189,11 +200,13 @@ class PostListItem(BaseModel):
     published_at: Optional[datetime] = None
     reading_time_minutes: int
     views_count: int
+    likes_count: int = 0
     category: Optional[CategoryResponse] = None
     tags: List[TagResponse] = []
     author: Optional[AuthorBrief] = None
     # Series fields
     series_id: Optional[str] = None
+    series: Optional[SeriesBrief] = None
     chapter_id: Optional[str] = None
     order_in_chapter: Optional[int] = None
     created_at: datetime

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -15,7 +15,7 @@ import {
   X,
   ShieldCheck,
 } from "lucide-react";
-import { getFullImageUrl, requestCollaboration } from "@/lib/api";
+import { getCollaborators, getFullImageUrl, requestCollaboration } from "@/lib/api";
 import { SeriesDetail } from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
 import { buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
@@ -34,6 +34,22 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
   const [collabSubmitting, setCollabSubmitting] = useState(false);
   const [collabSuccess, setCollabSuccess] = useState(false);
   const [collabError, setCollabError] = useState("");
+  const [isAlreadyCollaborator, setIsAlreadyCollaborator] = useState(false);
+
+  // Check if current user is already a collaborator
+  useEffect(() => {
+    if (!user || !token) return;
+    getCollaborators(series.id, token)
+      .then((collabs) => {
+        setIsAlreadyCollaborator(collabs.some((c) => c.user_id === user.id));
+      })
+      .catch(() => {
+        // ignore – non-critical
+      });
+  }, [user, token, series.id]);
+
+  const isAuthor = Boolean(user && series.author?.id && user.id === series.author.id);
+  const showCollabButton = !isAuthor && !isAlreadyCollaborator;
 
   const handleCollabSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,19 +137,21 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                   <span>Bắt đầu học (Bài 1: {firstLesson.title})</span>
                 </Link>
               )}
-              <button
-                onClick={() => {
-                  if (!user) {
-                    alert("Vui lòng đăng nhập để gửi yêu cầu cộng tác!");
-                    return;
-                  }
-                  setShowCollabModal(true);
-                }}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-semibold text-sm transition-all border border-stone-200 dark:border-stone-700 hover:scale-[1.02]"
-              >
-                <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span>Xin cộng tác biên soạn</span>
-              </button>
+              {showCollabButton && (
+                <button
+                  onClick={() => {
+                    if (!user) {
+                      alert("Vui lòng đăng nhập để gửi yêu cầu cộng tác!");
+                      return;
+                    }
+                    setShowCollabModal(true);
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-semibold text-sm transition-all border border-stone-200 dark:border-stone-700 hover:scale-[1.02]"
+                >
+                  <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>Xin cộng tác biên soạn</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -161,12 +179,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
 
       {/* Attribution & Copyright Banner */}
       {(() => {
-        const attribution =
-          series.attribution_text ||
-          (series.title.toLowerCase().includes("claude") || series.title.toLowerCase().includes("anthropic")
-            ? "Khóa học được biên dịch và tổng hợp từ tài liệu đào tạo chính thức của Anthropic PBC (Claude Certified Architect). Bản quyền nội dung gốc thuộc về Anthropic PBC. Bản dịch tiếng Việt, hệ thống hóa và ghi chú thực hành bởi HungPH Blog."
-            : null);
-
+        const attribution = series.attribution_text?.trim();
         if (!attribution) return null;
 
         return (

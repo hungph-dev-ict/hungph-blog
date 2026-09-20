@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/auth-context";
 import { fetchUsers, updateUserRole, deleteUser } from "@/lib/api";
 import { User } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { AdminNav } from "@/components/admin/AdminNav";
 
 export default function AdminUsersPage() {
   const router = useRouter();
@@ -150,30 +151,8 @@ export default function AdminUsersPage() {
           </div>
         </div>
 
-        {/* Quick links */}
-        <div className="flex items-center gap-2">
-          <Link
-            href="/admin/posts"
-            className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800"
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Bài viết</span>
-          </Link>
-          <Link
-            href="/admin/series"
-            className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800"
-          >
-            <GraduationCap className="w-3.5 h-3.5" />
-            <span>Khóa học</span>
-          </Link>
-          <Link
-            href="/admin/categories"
-            className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800"
-          >
-            <FolderTree className="w-3.5 h-3.5" />
-            <span>Danh mục</span>
-          </Link>
-        </div>
+        {/* Admin Navigation */}
+        <AdminNav currentTab="users" disabled={Boolean(actionLoading)} />
       </div>
 
       {/* Stats cards */}

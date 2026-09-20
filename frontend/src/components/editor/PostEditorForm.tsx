@@ -20,6 +20,7 @@ import {
   Unlink,
   ListOrdered,
   Check,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -80,6 +81,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   // Aux state
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
+  const [actionType, setActionType] = useState<"draft" | "publish" | null>(null);
   const [pageLoading, setPageLoading] = useState(!!postId);
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
   const [showNewCatModal, setShowNewCatModal] = useState(false);
@@ -303,7 +305,9 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
       }
     }
 
+    if (loading) return;
     setLoading(true);
+    setActionType(publishStatus ? "publish" : "draft");
     const tagsArray = tagsInput
       .split(",")
       .map((t) => t.trim())
@@ -349,6 +353,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
       alert(`Lỗi khi lưu bài viết: ${err.message}`);
     } finally {
       setLoading(false);
+      setActionType(null);
     }
   };
 
@@ -382,7 +387,9 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         <div className="flex items-center gap-3">
           <Link
             href={backHref}
-            className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors"
+            className={`p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors ${
+              loading ? "pointer-events-none opacity-40 cursor-not-allowed" : ""
+            }`}
             title={backTitle}
           >
             <ArrowLeft className="w-5 h-5" />
@@ -403,7 +410,9 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
               {isCoursePost && (
                 <Link
                   href={backHref}
-                  className="text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-1"
+                  className={`text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-1 ${
+                    loading ? "pointer-events-none opacity-50" : ""
+                  }`}
                   title={backTitle}
                 >
                   • <GraduationCap className="w-3 h-3" /> {targetSeriesTitle ? `Khóa học: ${targetSeriesTitle}` : "Thuộc Khóa học"}
@@ -418,7 +427,9 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
             <Link
               href={`/posts/${savedSlug}`}
               target="_blank"
-              className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
+                loading ? "pointer-events-none opacity-40" : ""
+              }`}
             >
               <ExternalLink className="w-3.5 h-3.5" />
               <span>Xem bài viết</span>
@@ -429,20 +440,34 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
             type="button"
             disabled={loading}
             onClick={() => handleSubmit(false)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            <Save className="w-3.5 h-3.5" />
-            <span>Lưu nháp</span>
+            {loading && actionType === "draft" ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-500" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            <span>{loading && actionType === "draft" ? "Đang lưu..." : "Lưu nháp"}</span>
           </button>
 
           <button
             type="button"
             disabled={loading}
             onClick={() => handleSubmit(true)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/25 disabled:opacity-50 transition-all"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
-            <Send className="w-3.5 h-3.5" />
-            <span>{isPublished ? "Cập nhật xuất bản" : "Xuất bản ngay"}</span>
+            {loading && actionType === "publish" ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+            ) : (
+              <Send className="w-3.5 h-3.5" />
+            )}
+            <span>
+              {loading && actionType === "publish"
+                ? "Đang lưu..."
+                : isPublished
+                ? "Cập nhật xuất bản"
+                : "Xuất bản ngay"}
+            </span>
           </button>
         </div>
       </div>

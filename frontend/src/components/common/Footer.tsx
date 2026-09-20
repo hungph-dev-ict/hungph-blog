@@ -41,9 +41,9 @@ export const Footer: React.FC = () => {
   }, []);
 
   return (
-    <footer className="border-t border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900/50 mt-20 transition-colors">
-      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+    <footer className="border-t border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900/50 mt-16 sm:mt-20 transition-colors">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-5 sm:pt-12 sm:pb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-6 sm:mb-8">
           {/* Col 1 */}
           <div className="space-y-3">
             <div className="font-bold text-lg text-stone-900 dark:text-white">
@@ -121,7 +121,7 @@ export const Footer: React.FC = () => {
           </div>
         </div>
 
-        <div className="pt-8 border-t border-stone-200 dark:border-stone-800 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-400 gap-4">
+        <div className="pt-6 sm:pt-8 border-t border-stone-200 dark:border-stone-800 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-400 gap-3 sm:gap-4">
           <p>© {new Date().getFullYear()} Hung Pham Hoang. All rights reserved.</p>
           <p className="flex items-center gap-1">
             Built with <Heart className="w-3 h-3 text-rose-500 fill-rose-500" /> for reading & writing.

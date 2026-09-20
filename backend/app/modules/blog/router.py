@@ -15,6 +15,7 @@ from app.modules.auth.models import User
 from app.modules.blog.models import Category, Chapter, Comment, Post, PostLike, PostReport, Series, SeriesCollaborator, Tag, post_tags
 from app.modules.social.models import Follow, Notification
 from app.modules.blog.schemas import (
+    AuthorBrief,
     CategoryCreate,
     CategoryResponse,
     CategoryUpdate,
@@ -88,7 +89,7 @@ async def make_unique_slug(db: AsyncSession, base_text: str, model_cls=Post, cur
 @router.get("/posts", response_model=PaginatedPosts)
 async def list_posts(
     page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(10, ge=1, le=500),
     category: Optional[str] = None,
     tag: Optional[str] = None,
     search: Optional[str] = None,
@@ -105,6 +106,7 @@ async def list_posts(
             selectinload(Post.author),
             selectinload(Post.series),
             selectinload(Post.chapter),
+            selectinload(Post.likes),
         )
     )
 
@@ -184,6 +186,7 @@ async def get_post_by_slug(
             selectinload(Post.author),
             selectinload(Post.series),
             selectinload(Post.chapter),
+            selectinload(Post.likes),
         )
     )
     res = await db.execute(stmt)
@@ -732,6 +735,7 @@ async def list_series(
     stmt = (
         select(Series)
         .options(
+            selectinload(Series.owner),
             selectinload(Series.category),
             selectinload(Series.chapters).selectinload(Chapter.posts),
             selectinload(Series.posts)
@@ -748,6 +752,24 @@ async def list_series(
     for s in series_list:
         tot_chapters = len(s.chapters)
         tot_lessons = sum(len(ch.posts) for ch in s.chapters)
+        all_lessons = []
+        seen_post_ids = set()
+        for ch in s.chapters:
+            for p in ch.posts:
+                if p.id not in seen_post_ids:
+                    seen_post_ids.add(p.id)
+                    all_lessons.append(p)
+        for p in (s.posts or []):
+            if p.id not in seen_post_ids:
+                seen_post_ids.add(p.id)
+                all_lessons.append(p)
+
+        tot_reading_time = sum(p.reading_time_minutes or 1 for p in all_lessons)
+        if tot_lessons == 0 and len(all_lessons) > 0:
+            tot_lessons = len(all_lessons)
+
+        author_brief = AuthorBrief.model_validate(s.owner) if s.owner else None
+
         s_resp = SeriesResponse(
             id=s.id,
             title=s.title,
@@ -760,8 +782,10 @@ async def list_series(
             attribution_text=s.attribution_text,
             created_at=s.created_at,
             category=CategoryResponse.model_validate(s.category) if s.category else None,
+            author=author_brief,
             total_chapters=tot_chapters,
-            total_lessons=tot_lessons
+            total_lessons=tot_lessons,
+            total_reading_time_minutes=tot_reading_time
         )
         output.append(s_resp)
     return output
@@ -773,8 +797,10 @@ async def get_series_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
         select(Series)
         .where(Series.slug == slug)
         .options(
+            selectinload(Series.owner),
             selectinload(Series.category),
             selectinload(Series.chapters).selectinload(Chapter.posts),
+            selectinload(Series.posts),
         )
     )
     res = await db.execute(stmt)
@@ -784,9 +810,15 @@ async def get_series_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
 
     chapters_data = []
     total_lessons = 0
+    all_lessons = []
+    seen_post_ids = set()
     for ch in sorted(s.chapters, key=lambda c: c.order):
         posts = sorted(ch.posts, key=lambda p: p.order_in_chapter or 1)
         total_lessons += len(posts)
+        for p in posts:
+            if p.id not in seen_post_ids:
+                seen_post_ids.add(p.id)
+                all_lessons.append(p)
         chapters_data.append(
             ChapterWithLessons(
                 id=ch.id,
@@ -801,6 +833,14 @@ async def get_series_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
             )
         )
 
+    for p in (s.posts or []):
+        if p.id not in seen_post_ids:
+            seen_post_ids.add(p.id)
+            all_lessons.append(p)
+
+    tot_reading_time = sum(p.reading_time_minutes or 1 for p in all_lessons)
+    author_brief = AuthorBrief.model_validate(s.owner) if s.owner else None
+
     return SeriesDetailResponse(
         id=s.id,
         title=s.title,
@@ -813,8 +853,10 @@ async def get_series_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
         attribution_text=s.attribution_text,
         created_at=s.created_at,
         category=CategoryResponse.model_validate(s.category) if s.category else None,
+        author=author_brief,
         total_chapters=len(chapters_data),
         total_lessons=total_lessons,
+        total_reading_time_minutes=tot_reading_time,
         chapters=chapters_data
     )
 

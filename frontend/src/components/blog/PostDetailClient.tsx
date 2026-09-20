@@ -119,10 +119,17 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
           ]}
         />
 
-        {/* Navigation / Course Breadcrumb */}
         <div className="mb-6 flex items-center justify-between">
           <button
-            onClick={() => router.back()}
+            onClick={() => {
+              if (window.history.length > 1) {
+                router.back();
+              } else if (post.series_outline?.slug) {
+                router.push(`/series/${post.series_outline.slug}`);
+              } else {
+                router.push("/");
+              }
+            }}
             className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -359,11 +366,7 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
             />
 
             {/* Course Attribution & Copyright Notice */}
-            {(post.series_outline?.attribution_text ||
-              post.series_outline?.title?.toLowerCase().includes("claude") ||
-              post.series_outline?.title?.toLowerCase().includes("anthropic") ||
-              post.title?.toLowerCase().includes("claude") ||
-              post.title?.toLowerCase().includes("anthropic")) && (
+            {Boolean(post.series_outline?.attribution_text?.trim()) && (
               <div className="mt-8 p-4 sm:p-5 rounded-2xl border border-amber-200/90 dark:border-amber-900/50 bg-gradient-to-r from-amber-50/70 to-orange-50/40 dark:from-amber-950/20 dark:to-orange-950/10 flex items-start gap-3.5 text-xs shadow-sm">
                 <div className="p-2 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 shrink-0 border border-amber-200 dark:border-amber-800/80">
                   <ShieldCheck className="w-4 h-4" />
@@ -373,8 +376,7 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                     Bản quyền &amp; Nguồn tài liệu gốc
                   </div>
                   <p className="text-amber-900/85 dark:text-amber-300/85 leading-relaxed text-xs">
-                    {post.series_outline?.attribution_text ||
-                      "Nội dung bài viết thuộc lộ trình chuẩn bị chứng chỉ Claude Certified Architect, được tổng hợp và biên dịch từ tài liệu đào tạo chính thức của Anthropic PBC. Bản quyền nội dung gốc thuộc về Anthropic PBC. Bản dịch tiếng Việt và chú giải thực hành bởi HungPH Blog."}
+                    {post.series_outline?.attribution_text}
                   </p>
                 </div>
               </div>

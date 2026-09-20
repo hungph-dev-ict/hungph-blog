@@ -33,6 +33,7 @@ import {
 } from "@/lib/api";
 import { Category, Chapter, Series, SeriesDetail } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { AdminNav } from "@/components/admin/AdminNav";
 import { HierarchyConfigEditor } from "@/components/series/HierarchyConfigEditor";
 import { ChapterNode, buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
 
@@ -390,21 +391,18 @@ function AdminSeriesContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link
-            href="/admin/categories"
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800"
-          >
-            Quản lý danh mục
-          </Link>
-          <button
-            onClick={() => setShowNewSeriesModal(true)}
-            className="flex items-center gap-1 text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tạo Khóa học mới</span>
-          </button>
-        </div>
+        <AdminNav
+          currentTab="series"
+          actionButton={
+            <button
+              onClick={() => setShowNewSeriesModal(true)}
+              className="flex items-center gap-1 text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tạo Khóa học mới</span>
+            </button>
+          }
+        />
       </div>
 
       {/* Modal Tạo Series Mới */}

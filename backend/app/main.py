@@ -24,19 +24,25 @@ async def init_default_data():
     async with engine.begin() as conn:
         from sqlalchemy import text
         # Bổ sung cột mới cho các bảng đã tồn tại TRƯỚC khi create_all
-        try:
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500);"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(100);"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'member';"))
-            # Social features
-            await conn.execute(text("ALTER TABLE series ADD COLUMN IF NOT EXISTS owner_id VARCHAR(36);"))
-            # Course hierarchy & attribution
-            await conn.execute(text("ALTER TABLE series ADD COLUMN IF NOT EXISTS hierarchy_config TEXT DEFAULT '[\"Chương\"]';"))
-            await conn.execute(text("ALTER TABLE series ADD COLUMN IF NOT EXISTS attribution_text TEXT;"))
-            await conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS parent_id VARCHAR(36);"))
-            await conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS level INT DEFAULT 1;"))
-        except Exception as mig_err:
-            print(f"Migration note (pre-create): {mig_err}")
+        is_sqlite = "sqlite" in settings.DATABASE_URL
+        migrations = [
+            ("users", "avatar_url", "VARCHAR(500)"),
+            ("users", "google_id", "VARCHAR(100)"),
+            ("users", "role", "VARCHAR(20) DEFAULT 'member'"),
+            ("series", "owner_id", "VARCHAR(36)"),
+            ("series", "hierarchy_config", "TEXT DEFAULT '[\"Chương\"]'"),
+            ("series", "attribution_text", "TEXT"),
+            ("chapters", "parent_id", "VARCHAR(36)"),
+            ("chapters", "level", "INT DEFAULT 1"),
+        ]
+        for tbl, col, col_def in migrations:
+            try:
+                if is_sqlite:
+                    await conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {col} {col_def};"))
+                else:
+                    await conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {col_def};"))
+            except Exception:
+                pass
         # Tạo tất cả bảng mới (new tables from social module)
         await conn.run_sync(Base.metadata.create_all)
 

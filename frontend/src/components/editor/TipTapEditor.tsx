@@ -4,7 +4,6 @@ import React, { useRef, useState, useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
-import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import {
@@ -63,16 +62,16 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         heading: {
           levels: [1, 2, 3],
         },
+        link: {
+          openOnClick: false,
+          HTMLAttributes: {
+            class: "text-blue-600 underline font-medium",
+          },
+        },
       }),
       Image.configure({
         inline: true,
         allowBase64: true,
-      }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: "text-blue-600 underline font-medium",
-        },
       }),
       Placeholder.configure({
         placeholder: "Bắt đầu viết nội dung tại đây... Hãy chia sẻ ý tưởng của bạn!",

@@ -66,6 +66,12 @@ export interface Chapter {
   sub_chapters?: Chapter[];
 }
 
+export interface SeriesBrief {
+  id: string;
+  title: string;
+  slug: string;
+}
+
 export interface Series {
   id: string;
   title: string;
@@ -78,8 +84,10 @@ export interface Series {
   attribution_text?: string;
   created_at: string;
   category?: Category;
+  author?: AuthorBrief;
   total_chapters: number;
   total_lessons: number;
+  total_reading_time_minutes?: number;
 }
 
 export interface SeriesDetail extends Series {
@@ -96,10 +104,12 @@ export interface PostListItem {
   published_at?: string;
   reading_time_minutes: number;
   views_count: number;
+  likes_count?: number;
   category?: Category;
   tags: Tag[];
   author?: AuthorBrief;
   series_id?: string;
+  series?: SeriesBrief;
   chapter_id?: string;
   order_in_chapter?: number;
   created_at: string;

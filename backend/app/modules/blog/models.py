@@ -123,6 +123,10 @@ class Post(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    @property
+    def likes_count(self) -> int:
+        return len(self.likes) if self.likes is not None else 0
+
 
 class SeriesCollaborator(Base):
     """Yêu cầu cộng tác biên soạn khoá học."""
