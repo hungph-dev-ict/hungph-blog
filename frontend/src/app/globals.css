@@ -2,6 +2,11 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", var(--font-inter), system-ui, -system-ui, sans-serif;
+  --font-mono: "SF Mono", "SFProMono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
 @layer base {
   :root {
     --background: #fafaf9;
@@ -27,13 +32,25 @@
     --accent-foreground: #ffffff;
   }
 
-  body {
+  html, body {
     background-color: var(--background);
     color: var(--foreground);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", var(--font-inter), system-ui, -system-ui, sans-serif;
+    letter-spacing: -0.011em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", var(--font-inter), system-ui, -system-ui, sans-serif;
+    letter-spacing: -0.024em;
+  }
+
+  code, pre, kbd, samp {
+    font-family: "SF Mono", "SFProMono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: -0.005em;
   }
 }
 
@@ -131,7 +148,7 @@
   padding: 1rem 1.25rem;
   border-radius: 0.75rem;
   overflow-x: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: "SF Mono", "SFProMono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.925rem;
   margin: 1.25rem 0;
   line-height: 1.6;
@@ -144,7 +161,7 @@
   padding: 0.15rem 0.4rem;
   border-radius: 0.35rem;
   font-size: 0.9em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: "SF Mono", "SFProMono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .blog-content pre code,
