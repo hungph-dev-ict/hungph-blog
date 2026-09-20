@@ -85,6 +85,7 @@ export interface Series {
   created_at: string;
   category?: Category;
   author?: AuthorBrief;
+  author_id?: string;
   total_chapters: number;
   total_lessons: number;
   total_reading_time_minutes?: number;

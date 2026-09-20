@@ -94,8 +94,10 @@ async def list_posts(
     tag: Optional[str] = None,
     search: Optional[str] = None,
     series_id: Optional[str] = None,
+    author_id: Optional[str] = None,
     include_drafts: bool = False,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    optional_user: Optional[User] = Depends(get_optional_user)
 ):
     offset = (page - 1) * limit
     stmt = (
@@ -110,8 +112,17 @@ async def list_posts(
         )
     )
 
-    if not include_drafts:
+    # Bảo mật bản nháp: Chưa đăng nhập hoặc ko chọn include_drafts -> chỉ bài đã xuất bản
+    # Nếu là Thành viên: chỉ được xem bản nháp do chính mình tạo
+    # Nếu là Admin: được xem mọi bản nháp khi include_drafts=True
+    is_admin = bool(optional_user and (optional_user.is_admin or getattr(optional_user, "role", "") == "admin"))
+    if not include_drafts or not optional_user:
         stmt = stmt.where(Post.is_published == True)
+    elif not is_admin:
+        stmt = stmt.where(or_(Post.is_published == True, Post.author_id == optional_user.id))
+
+    if author_id:
+        stmt = stmt.where(Post.author_id == author_id)
 
     if category:
         stmt = stmt.join(Post.category).where(Category.slug == category)
@@ -134,8 +145,13 @@ async def list_posts(
 
     # Count total
     count_stmt = select(func.count(Post.id))
-    if not include_drafts:
+    if not include_drafts or not optional_user:
         count_stmt = count_stmt.where(Post.is_published == True)
+    elif not is_admin:
+        count_stmt = count_stmt.where(or_(Post.is_published == True, Post.author_id == optional_user.id))
+
+    if author_id:
+        count_stmt = count_stmt.where(Post.author_id == author_id)
     if category:
         count_stmt = count_stmt.join(Post.category).where(Category.slug == category)
     if tag:
@@ -143,6 +159,14 @@ async def list_posts(
     if series_id:
         count_stmt = count_stmt.where(Post.series_id == series_id)
     if search:
+        search_fmt = f"%{search}%"
+        count_stmt = count_stmt.where(
+            or_(
+                Post.title.ilike(search_fmt),
+                Post.summary.ilike(search_fmt),
+                Post.content_html.ilike(search_fmt)
+            )
+        )
         search_fmt = f"%{search}%"
         count_stmt = count_stmt.where(
             or_(
@@ -217,8 +241,31 @@ async def get_post_by_slug(
         if series_obj:
             chapters_data = []
             all_ordered_lessons: List[Post] = []
-            
-            for ch in sorted(series_obj.chapters, key=lambda c: c.order):
+
+            # Sắp xếp chương theo cấu trúc phả hệ: Cấp to (root) -> Cấp bé (children) -> Bài học
+            ch_map = {ch.id: ch for ch in series_obj.chapters}
+            children_map = {}
+            roots = []
+            for ch in series_obj.chapters:
+                if ch.parent_id and ch.parent_id in ch_map:
+                    children_map.setdefault(ch.parent_id, []).append(ch)
+                else:
+                    roots.append(ch)
+
+            roots.sort(key=lambda c: c.order)
+            for p_id in children_map:
+                children_map[p_id].sort(key=lambda c: c.order)
+
+            ordered_chapters = []
+            def traverse_chapters(ch_node):
+                ordered_chapters.append(ch_node)
+                for child in children_map.get(ch_node.id, []):
+                    traverse_chapters(child)
+
+            for r in roots:
+                traverse_chapters(r)
+
+            for ch in ordered_chapters:
                 ch_posts = [p for p in ch.posts if p.is_published]
                 ch_posts.sort(key=lambda p: p.order_in_chapter or 1)
                 all_ordered_lessons.extend(ch_posts)
@@ -229,6 +276,8 @@ async def get_post_by_slug(
                         title=ch.title,
                         order=ch.order,
                         description=ch.description,
+                        parent_id=ch.parent_id,
+                        level=ch.level or 1,
                         created_at=ch.created_at,
                         lessons=[LessonBrief.model_validate(p) for p in ch_posts]
                     )
@@ -783,11 +832,80 @@ async def list_series(
             created_at=s.created_at,
             category=CategoryResponse.model_validate(s.category) if s.category else None,
             author=author_brief,
+            author_id=s.owner_id,
             total_chapters=tot_chapters,
             total_lessons=tot_lessons,
             total_reading_time_minutes=tot_reading_time
         )
         output.append(s_resp)
+    return output
+
+
+@router.get("/series/writeable", response_model=List[SeriesResponse])
+async def list_writeable_series(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Trả về danh sách khóa học mà người dùng hiện tại có quyền viết/gán bài vào:
+    - Admin: Tất cả khóa học
+    - Thành viên: Chỉ các khóa học mà mình là Tác giả sở hữu (owner_id) hoặc Cộng tác viên đã được duyệt (accepted)
+    """
+    is_admin = current_user.is_admin or getattr(current_user, "role", "") == "admin"
+    stmt = (
+        select(Series)
+        .options(
+            selectinload(Series.owner),
+            selectinload(Series.category),
+            selectinload(Series.chapters).selectinload(Chapter.posts),
+            selectinload(Series.posts)
+        )
+        .order_by(desc(Series.created_at))
+    )
+
+    if not is_admin:
+        collab_subquery = (
+            select(SeriesCollaborator.series_id)
+            .where(
+                SeriesCollaborator.user_id == current_user.id,
+                SeriesCollaborator.status == "accepted"
+            )
+        )
+        stmt = stmt.where(
+            or_(
+                Series.owner_id == current_user.id,
+                Series.id.in_(collab_subquery)
+            )
+        )
+
+    res = await db.execute(stmt)
+    series_list = res.scalars().all()
+
+    output = []
+    for s in series_list:
+        tot_chapters = len(s.chapters)
+        tot_lessons = sum(len(ch.posts) for ch in s.chapters)
+        author_brief = AuthorBrief.model_validate(s.owner) if s.owner else None
+        output.append(
+            SeriesResponse(
+                id=s.id,
+                title=s.title,
+                slug=s.slug,
+                summary=s.summary,
+                cover_image=s.cover_image,
+                is_published=s.is_published,
+                category_id=s.category_id,
+                hierarchy_config=s.hierarchy_config,
+                attribution_text=s.attribution_text,
+                created_at=s.created_at,
+                category=CategoryResponse.model_validate(s.category) if s.category else None,
+                author=author_brief,
+                author_id=s.owner_id,
+                total_chapters=tot_chapters,
+                total_lessons=tot_lessons,
+                total_reading_time_minutes=0
+            )
+        )
     return output
 
 
@@ -854,6 +972,7 @@ async def get_series_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
         created_at=s.created_at,
         category=CategoryResponse.model_validate(s.category) if s.category else None,
         author=author_brief,
+        author_id=s.owner_id,
         total_chapters=len(chapters_data),
         total_lessons=total_lessons,
         total_reading_time_minutes=tot_reading_time,
@@ -868,13 +987,20 @@ async def create_series(
     admin: User = Depends(get_current_admin)
 ):
     slug = await make_unique_slug(db, series_in.slug or series_in.title, model_cls=Series)
+    
+    owner_user = admin
+    if series_in.author_id and series_in.author_id.strip():
+        target_u = (await db.execute(select(User).where(User.id == series_in.author_id.strip()))).scalar_one_or_none()
+        if target_u:
+            owner_user = target_u
+
     new_series = Series(
         title=series_in.title.strip(),
         slug=slug,
         summary=series_in.summary,
         cover_image=series_in.cover_image,
         is_published=series_in.is_published,
-        owner_id=admin.id,
+        owner_id=owner_user.id,
         category_id=series_in.category_id if series_in.category_id != "" else None,
         hierarchy_config=series_in.hierarchy_config or '["Chương"]',
         attribution_text=series_in.attribution_text
@@ -894,6 +1020,9 @@ async def create_series(
         hierarchy_config=new_series.hierarchy_config,
         attribution_text=new_series.attribution_text,
         created_at=new_series.created_at,
+        category=CategoryResponse.model_validate(new_series.category) if new_series.category else None,
+        author=AuthorBrief.model_validate(owner_user) if owner_user else None,
+        author_id=owner_user.id if owner_user else None,
         total_chapters=0,
         total_lessons=0
     )
@@ -925,8 +1054,53 @@ async def update_series(
     if series_in.attribution_text is not None:
         s.attribution_text = series_in.attribution_text
 
+    is_admin = current_user.is_admin or getattr(current_user, "role", "") == "admin"
+    if series_in.author_id is not None:
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="Chỉ Admin mới có quyền đổi tác giả của khóa học")
+        target_author_id = series_in.author_id.strip() if series_in.author_id.strip() else None
+        if target_author_id:
+            user_exists = (await db.execute(select(User).where(User.id == target_author_id))).scalar_one_or_none()
+            if not user_exists:
+                raise HTTPException(status_code=400, detail="Tác giả được chọn không tồn tại")
+            s.owner_id = target_author_id
+        else:
+            s.owner_id = None
+
     await db.commit()
-    await db.refresh(s)
+
+    # Re-query with all relations loaded for full response
+    stmt = (
+        select(Series)
+        .where(Series.id == s.id)
+        .options(
+            selectinload(Series.owner),
+            selectinload(Series.category),
+            selectinload(Series.chapters).selectinload(Chapter.posts),
+            selectinload(Series.posts)
+        )
+    )
+    res = await db.execute(stmt)
+    s = res.scalar_one()
+
+    tot_chapters = len(s.chapters)
+    tot_lessons = sum(len(ch.posts) for ch in s.chapters)
+    all_lessons = []
+    seen_post_ids = set()
+    for ch in s.chapters:
+        for p in ch.posts:
+            if p.id not in seen_post_ids:
+                seen_post_ids.add(p.id)
+                all_lessons.append(p)
+    for p in (s.posts or []):
+        if p.id not in seen_post_ids:
+            seen_post_ids.add(p.id)
+            all_lessons.append(p)
+
+    tot_reading_time = sum(p.reading_time_minutes or 1 for p in all_lessons)
+    if tot_lessons == 0 and len(all_lessons) > 0:
+        tot_lessons = len(all_lessons)
+
     return SeriesResponse(
         id=s.id,
         title=s.title,
@@ -939,8 +1113,11 @@ async def update_series(
         attribution_text=s.attribution_text,
         created_at=s.created_at,
         category=CategoryResponse.model_validate(s.category) if s.category else None,
-        total_chapters=len(s.chapters),
-        total_lessons=0
+        author=AuthorBrief.model_validate(s.owner) if s.owner else None,
+        author_id=s.owner_id,
+        total_chapters=tot_chapters,
+        total_lessons=tot_lessons,
+        total_reading_time_minutes=tot_reading_time
     )
 
 

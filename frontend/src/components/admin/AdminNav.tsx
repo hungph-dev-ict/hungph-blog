@@ -2,10 +2,10 @@
 
 import React from "react";
 import Link from "next/link";
-import { FileText, Users, GraduationCap, Layers } from "lucide-react";
+import { FileText, Users, GraduationCap, Layers, Flag } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
-export type AdminTab = "posts" | "users" | "series" | "categories";
+export type AdminTab = "posts" | "users" | "series" | "categories" | "reports";
 
 interface AdminNavProps {
   currentTab: AdminTab;
@@ -24,7 +24,7 @@ export const AdminNav: React.FC<AdminNavProps> = ({
   const tabs: { key: AdminTab; label: string; href: string; icon: React.ComponentType<{ className?: string }>; adminOnly: boolean }[] = [
     {
       key: "posts",
-      label: "Quản lý bài viết",
+      label: isAdmin ? "Quản lý bài viết" : "Bài viết của tôi",
       href: "/admin/posts",
       icon: FileText,
       adminOnly: false,
@@ -48,6 +48,13 @@ export const AdminNav: React.FC<AdminNavProps> = ({
       label: "Danh mục",
       href: "/admin/categories",
       icon: Layers,
+      adminOnly: true,
+    },
+    {
+      key: "reports",
+      label: "Tố cáo",
+      href: "/admin/reports",
+      icon: Flag,
       adminOnly: true,
     },
   ];

@@ -20,22 +20,19 @@ import { fetchUsers, updateUserRole, deleteUser } from "@/lib/api";
 import { User } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { AdminGuard } from "@/components/admin/AdminGuard";
+import { useLoading } from "@/lib/loading-context";
 
 export default function AdminUsersPage() {
   const router = useRouter();
   const { user: currentUser, token, isLoading } = useAuth();
+  const { withLoading } = useLoading();
 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const isAdmin = currentUser?.is_admin || currentUser?.role === "admin";
-
-  useEffect(() => {
-    if (!isLoading && (!currentUser || !isAdmin)) {
-      router.push("/");
-    }
-  }, [currentUser, isLoading, isAdmin, router]);
 
   const loadUsers = async () => {
     if (!token) return;
@@ -67,14 +64,16 @@ export default function AdminUsersPage() {
     if (!window.confirm(`Bạn có chắc muốn ${actionText}?`)) return;
 
     setActionLoading(targetUser.id);
-    try {
-      await updateUserRole(targetUser.id, newRole, targetUser.is_active, token);
-      await loadUsers();
-    } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
-    } finally {
-      setActionLoading(null);
-    }
+    await withLoading(async () => {
+      try {
+        await updateUserRole(targetUser.id, newRole, targetUser.is_active, token);
+        await loadUsers();
+      } catch (err: any) {
+        alert(`Lỗi: ${err.message}`);
+      } finally {
+        setActionLoading(null);
+      }
+    }, `Đang cập nhật quyền của "${targetUser.full_name || targetUser.email}"...`);
   };
 
   const handleToggleActive = async (targetUser: User) => {
@@ -85,14 +84,16 @@ export default function AdminUsersPage() {
     if (!window.confirm(`Bạn có chắc muốn ${actionText} tài khoản này?`)) return;
 
     setActionLoading(targetUser.id);
-    try {
-      await updateUserRole(targetUser.id, targetUser.role || "member", newActive, token);
-      await loadUsers();
-    } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
-    } finally {
-      setActionLoading(null);
-    }
+    await withLoading(async () => {
+      try {
+        await updateUserRole(targetUser.id, targetUser.role || "member", newActive, token);
+        await loadUsers();
+      } catch (err: any) {
+        alert(`Lỗi: ${err.message}`);
+      } finally {
+        setActionLoading(null);
+      }
+    }, `Đang ${actionText} tài khoản...`);
   };
 
   const handleDelete = async (targetUser: User) => {
@@ -100,14 +101,16 @@ export default function AdminUsersPage() {
     if (!window.confirm(`Xóa vĩnh viễn tài khoản "${targetUser.email}"? Thao tác này không thể hoàn tác!`)) return;
 
     setActionLoading(targetUser.id);
-    try {
-      await deleteUser(targetUser.id, token);
-      setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
-    } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
-    } finally {
-      setActionLoading(null);
-    }
+    await withLoading(async () => {
+      try {
+        await deleteUser(targetUser.id, token);
+        setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
+      } catch (err: any) {
+        alert(`Lỗi: ${err.message}`);
+      } finally {
+        setActionLoading(null);
+      }
+    }, `Đang xóa tài khoản "${targetUser.email}"...`);
   };
 
   if (isLoading || !currentUser || !isAdmin) {
@@ -122,7 +125,8 @@ export default function AdminUsersPage() {
   const totalMembers = users.length - totalAdmins;
 
   return (
-    <div className="w-full space-y-6 pb-16">
+    <AdminGuard requireAdmin={true}>
+      <div className="w-full space-y-6 pb-16">
       <Breadcrumbs
         items={[
           { label: "Quản trị", href: "/admin/posts" },
@@ -303,6 +307,7 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </AdminGuard>
   );
 }

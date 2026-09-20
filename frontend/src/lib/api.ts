@@ -52,15 +52,19 @@ function getHeaders(token?: string | null): HeadersInit {
 }
 
 // --- POSTS ---
-export async function fetchPosts(params?: {
-  page?: number;
-  limit?: number;
-  category?: string;
-  tag?: string;
-  search?: string;
-  series_id?: string;
-  include_drafts?: boolean;
-}): Promise<PaginatedPosts> {
+export async function fetchPosts(
+  params?: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    tag?: string;
+    search?: string;
+    series_id?: string;
+    author_id?: string;
+    include_drafts?: boolean;
+  },
+  token?: string | null
+): Promise<PaginatedPosts> {
   const query = new URLSearchParams();
   if (params?.page) query.append("page", params.page.toString());
   if (params?.limit) query.append("limit", params.limit.toString());
@@ -68,13 +72,26 @@ export async function fetchPosts(params?: {
   if (params?.tag) query.append("tag", params.tag);
   if (params?.search) query.append("search", params.search);
   if (params?.series_id) query.append("series_id", params.series_id);
+  if (params?.author_id) query.append("author_id", params.author_id);
   if (params?.include_drafts) query.append("include_drafts", "true");
 
   const res = await fetch(`${API_BASE_URL}/blog/posts?${query.toString()}`, {
+    headers: getHeaders(token),
     cache: "no-store",
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch posts: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchWriteableSeries(token: string): Promise<Series[]> {
+  const res = await fetch(`${API_BASE_URL}/blog/series/writeable`, {
+    headers: getHeaders(token),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error("Failed to fetch writeable series");
   }
   return res.json();
 }
@@ -261,6 +278,7 @@ export async function createSeries(
     category_id?: string;
     hierarchy_config?: string;
     attribution_text?: string;
+    author_id?: string;
   },
   token: string
 ): Promise<Series> {
@@ -287,6 +305,7 @@ export async function updateSeries(
     category_id?: string;
     hierarchy_config?: string;
     attribution_text?: string;
+    author_id?: string;
   },
   token: string
 ): Promise<Series> {

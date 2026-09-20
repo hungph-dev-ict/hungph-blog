@@ -28,14 +28,17 @@ import {
   updateChapter,
   deleteChapter,
   fetchCategories,
+  fetchUsers,
   getFullImageUrl,
   uploadMedia,
 } from "@/lib/api";
-import { Category, Chapter, Series, SeriesDetail } from "@/lib/types";
+import { Category, Chapter, Series, SeriesDetail, User } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { AdminGuard } from "@/components/admin/AdminGuard";
 import { HierarchyConfigEditor } from "@/components/series/HierarchyConfigEditor";
 import { ChapterNode, buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
+import { useLoading } from "@/lib/loading-context";
 
 function AdminSeriesContent() {
   const router = useRouter();
@@ -43,9 +46,11 @@ function AdminSeriesContent() {
   const slugParam = searchParams.get("slug");
   const idParam = searchParams.get("id");
   const { user, token, isLoading } = useAuth();
+  const { withLoading } = useLoading();
 
   const [seriesList, setSeriesList] = useState<Series[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
   // New Series form
@@ -56,6 +61,7 @@ function AdminSeriesContent() {
   const [categoryId, setCategoryId] = useState("");
   const [hierarchyConfig, setHierarchyConfig] = useState('["Chương"]');
   const [attributionText, setAttributionText] = useState("");
+  const [authorId, setAuthorId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // Edit Series form
@@ -66,6 +72,7 @@ function AdminSeriesContent() {
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editHierarchyConfig, setEditHierarchyConfig] = useState('["Chương"]');
   const [editAttributionText, setEditAttributionText] = useState("");
+  const [editAuthorId, setEditAuthorId] = useState("");
   const [editIsPublished, setEditIsPublished] = useState(true);
 
   // Selected Series for Chapter inspection
@@ -110,20 +117,21 @@ function AdminSeriesContent() {
     const file = e.target.files?.[0];
     if (!file || !token) return;
     setUploadingCover(true);
-    try {
-      const res = await uploadMedia(file, token);
-      if (isEdit) {
-        setEditCoverImage(res.url);
-      } else {
-        setCoverImage(res.url);
+    await withLoading(async () => {
+      try {
+        const res = await uploadMedia(file, token);
+        if (isEdit) {
+          setEditCoverImage(res.url);
+        } else {
+          setCoverImage(res.url);
+        }
+      } catch (err: any) {
+        alert(`Lỗi tải ảnh lên: ${err.message}`);
+      } finally {
+        setUploadingCover(false);
+        e.target.value = "";
       }
-    } catch (err: any) {
-      alert(`Lỗi tải ảnh lên: ${err.message}`);
-    } finally {
-      setUploadingCover(false);
-      // Reset input value so same file can be selected again if needed
-      e.target.value = "";
-    }
+    }, "Đang tải ảnh bìa khóa học lên...");
   };
 
   useEffect(() => {
@@ -135,9 +143,17 @@ function AdminSeriesContent() {
   const loadData = async (targetSlug?: string | null) => {
     setLoading(true);
     try {
-      const [sData, cData] = await Promise.all([fetchSeries(), fetchCategories()]);
+      const promises: [Promise<Series[]>, Promise<Category[]>, Promise<User[]>] = [
+        fetchSeries(),
+        fetchCategories(),
+        token ? fetchUsers(token).catch(() => []) : Promise.resolve([]),
+      ];
+      const [sData, cData, uData] = await Promise.all(promises);
       setSeriesList(sData);
       setCategories(cData);
+      if (uData && uData.length > 0) {
+        setUsers(uData);
+      }
 
       // Xác định khóa học cần chọn từ query parameters ngay khi load xong dữ liệu
       let slugToSelect = targetSlug;
@@ -174,6 +190,12 @@ function AdminSeriesContent() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (token && users.length === 0) {
+      fetchUsers(token).then(setUsers).catch(() => {});
+    }
+  }, [token, users.length]);
+
   // Lắng nghe thay đổi của searchParams khi điều hướng client-side
   useEffect(() => {
     const currentSlug = slugParam || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("slug") : null);
@@ -194,31 +216,35 @@ function AdminSeriesContent() {
     if (!title.trim() || !token) return;
 
     setSubmitting(true);
-    try {
-      await createSeries(
-        {
-          title: title.trim(),
-          summary: summary.trim() || undefined,
-          cover_image: coverImage.trim() || undefined,
-          category_id: categoryId || undefined,
-          hierarchy_config: hierarchyConfig,
-          attribution_text: attributionText.trim() || undefined,
-          is_published: true,
-        },
-        token
-      );
-      setTitle("");
-      setSummary("");
-      setCoverImage("");
-      setAttributionText("");
-      setHierarchyConfig('["Chương"]');
-      setShowNewSeriesModal(false);
-      loadData();
-    } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
-    } finally {
-      setSubmitting(false);
-    }
+    await withLoading(async () => {
+      try {
+        await createSeries(
+          {
+            title: title.trim(),
+            summary: summary.trim() || undefined,
+            cover_image: coverImage.trim() || undefined,
+            category_id: categoryId || undefined,
+            hierarchy_config: hierarchyConfig,
+            attribution_text: attributionText.trim() || undefined,
+            author_id: authorId || undefined,
+            is_published: true,
+          },
+          token
+        );
+        setTitle("");
+        setSummary("");
+        setCoverImage("");
+        setAttributionText("");
+        setAuthorId("");
+        setHierarchyConfig('["Chương"]');
+        setShowNewSeriesModal(false);
+        loadData();
+      } catch (err: any) {
+        alert(`Lỗi: ${err.message}`);
+      } finally {
+        setSubmitting(false);
+      }
+    }, "Đang tạo khóa học mới...");
   };
 
   const openEditSeriesModal = (s: Series) => {
@@ -230,6 +256,7 @@ function AdminSeriesContent() {
     setEditHierarchyConfig(s.hierarchy_config || '["Chương"]');
     setEditAttributionText(s.attribution_text || "");
     setEditIsPublished(s.is_published);
+    setEditAuthorId(s.author?.id || s.author_id || "");
   };
 
   const handleUpdateSeries = async (e: React.FormEvent) => {
@@ -237,81 +264,86 @@ function AdminSeriesContent() {
     if (!editingSeries || !editTitle.trim() || !token) return;
 
     setSubmitting(true);
-    try {
-      await updateSeries(
-        editingSeries.id,
-        {
-          title: editTitle.trim(),
-          summary: editSummary.trim() || undefined,
-          cover_image: editCoverImage.trim() ? editCoverImage.trim() : "",
-          category_id: editCategoryId || undefined,
-          hierarchy_config: editHierarchyConfig,
-          attribution_text: editAttributionText.trim() || undefined,
-          is_published: editIsPublished,
-        },
-        token
-      );
-      setEditingSeries(null);
-      await loadData();
-      if (selectedSeriesSlug === editingSeries.slug) {
-        inspectSeries(editingSeries.slug);
+    await withLoading(async () => {
+      try {
+        await updateSeries(
+          editingSeries.id,
+          {
+            title: editTitle.trim(),
+            summary: editSummary.trim() || undefined,
+            cover_image: editCoverImage.trim() ? editCoverImage.trim() : "",
+            category_id: editCategoryId || undefined,
+            hierarchy_config: editHierarchyConfig,
+            attribution_text: editAttributionText.trim() || undefined,
+            is_published: editIsPublished,
+            author_id: editAuthorId || undefined,
+          },
+          token
+        );
+        setEditingSeries(null);
+        await loadData();
+        if (selectedSeriesSlug === editingSeries.slug) {
+          inspectSeries(editingSeries.slug);
+        }
+      } catch (err: any) {
+        alert(`Lỗi khi cập nhật khóa học: ${err.message}`);
+      } finally {
+        setSubmitting(false);
       }
-    } catch (err: any) {
-      alert(`Lỗi khi cập nhật khóa học: ${err.message}`);
-    } finally {
-      setSubmitting(false);
-    }
+    }, "Đang lưu thay đổi khóa học...");
   };
 
   const handleDeleteSeries = async (id: string, sTitle: string) => {
     if (!token) return;
     if (!window.confirm(`Bạn có chắc muốn xóa khóa học "${sTitle}" cùng toàn bộ chương bên trong?`)) return;
 
-    try {
-      await deleteSeries(id, token);
-      setSeriesList((prev) => prev.filter((s) => s.id !== id));
-      if (selectedDetail?.id === id) {
-        setSelectedDetail(null);
-        setSelectedSeriesSlug(null);
-        if (typeof window !== "undefined") {
-          const currentUrl = new URL(window.location.href);
-          currentUrl.searchParams.delete("slug");
-          currentUrl.searchParams.delete("id");
-          window.history.replaceState(null, "", currentUrl.pathname);
+    await withLoading(async () => {
+      try {
+        await deleteSeries(id, token);
+        setSeriesList((prev) => prev.filter((s) => s.id !== id));
+        if (selectedDetail?.id === id) {
+          setSelectedDetail(null);
+          setSelectedSeriesSlug(null);
+          if (typeof window !== "undefined") {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.delete("slug");
+            currentUrl.searchParams.delete("id");
+            window.history.replaceState(null, "", currentUrl.pathname);
+          }
         }
+      } catch (err: any) {
+        alert(`Lỗi: ${err.message}`);
       }
-    } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
-    }
+    }, "Đang xóa khóa học...");
   };
-
-
 
   const handleAddChapter = async (seriesId: string) => {
     if (!newChapterTitle.trim() || !token) return;
-    try {
-      const order = (selectedDetail?.chapters?.length || 0) + 1;
-      let level = 1;
-      if (newChapterParentId) {
-        const parentCh = selectedDetail?.chapters?.find((c) => c.id === newChapterParentId);
-        level = parentCh ? (parentCh.level || 1) + 1 : 2;
+    await withLoading(async () => {
+      try {
+        const order = (selectedDetail?.chapters?.length || 0) + 1;
+        let level = 1;
+        if (newChapterParentId) {
+          const parentCh = selectedDetail?.chapters?.find((c) => c.id === newChapterParentId);
+          level = parentCh ? (parentCh.level || 1) + 1 : 2;
+        }
+        await addChapter(
+          seriesId,
+          {
+            title: newChapterTitle.trim(),
+            order,
+            parent_id: newChapterParentId || undefined,
+            level,
+          },
+          token
+        );
+        setNewChapterTitle("");
+        if (selectedSeriesSlug) inspectSeries(selectedSeriesSlug);
+        loadData();
+      } catch (err: any) {
+        alert(`Lỗi: ${err.message}`);
       }
-      await addChapter(
-        seriesId,
-        {
-          title: newChapterTitle.trim(),
-          order,
-          parent_id: newChapterParentId || undefined,
-          level,
-        },
-        token
-      );
-      setNewChapterTitle("");
-      if (selectedSeriesSlug) inspectSeries(selectedSeriesSlug);
-      loadData();
-    } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
-    }
+    }, "Đang thêm chương học mới...");
   };
 
   const startEditChapter = (chapterId: string, currentTitle: string, currentDesc?: string) => {
@@ -328,33 +360,37 @@ function AdminSeriesContent() {
 
   const handleSaveChapter = async (chapterId: string) => {
     if (!editingChapterTitle.trim() || !token) return;
-    try {
-      await updateChapter(
-        chapterId,
-        {
-          title: editingChapterTitle.trim(),
-          description: editingChapterDesc.trim() || undefined,
-        },
-        token
-      );
-      cancelEditChapter();
-      if (selectedSeriesSlug) inspectSeries(selectedSeriesSlug);
-    } catch (err: any) {
-      alert(`Lỗi khi sửa chương: ${err.message}`);
-    }
+    await withLoading(async () => {
+      try {
+        await updateChapter(
+          chapterId,
+          {
+            title: editingChapterTitle.trim(),
+            description: editingChapterDesc.trim() || undefined,
+          },
+          token
+        );
+        cancelEditChapter();
+        if (selectedSeriesSlug) inspectSeries(selectedSeriesSlug);
+      } catch (err: any) {
+        alert(`Lỗi khi sửa chương: ${err.message}`);
+      }
+    }, "Đang lưu chương học...");
   };
 
   const handleDeleteChapter = async (chapterId: string) => {
     if (!token) return;
     if (!window.confirm("Bạn có chắc muốn xóa chương này? Các bài viết trong chương sẽ được tách ra ngoài.")) return;
 
-    try {
-      await deleteChapter(chapterId, token);
-      if (selectedSeriesSlug) inspectSeries(selectedSeriesSlug);
-      loadData();
-    } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
-    }
+    await withLoading(async () => {
+      try {
+        await deleteChapter(chapterId, token);
+        if (selectedSeriesSlug) inspectSeries(selectedSeriesSlug);
+        loadData();
+      } catch (err: any) {
+        alert(`Lỗi: ${err.message}`);
+      }
+    }, "Đang xóa chương học...");
   };
 
   if (isLoading || !user) {
@@ -418,7 +454,7 @@ function AdminSeriesContent() {
             </button>
           </div>
           <form onSubmit={handleCreateSeries} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <input
                 type="text"
                 required
@@ -439,15 +475,32 @@ function AdminSeriesContent() {
                   </option>
                 ))}
               </select>
+              <select
+                value={authorId}
+                onChange={(e) => setAuthorId(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
+              >
+                <option value="">-- Tác giả (Mặc định: Bạn) --</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.full_name ? `${u.full_name} (@${u.username})` : u.username} {u.is_admin ? "⭐ (Admin)" : "• Thành viên"}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <textarea
-              rows={2}
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              placeholder="Tóm tắt lộ trình khóa học..."
-              className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
-            />
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                Mô tả khóa học:
+              </label>
+              <textarea
+                rows={4}
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                placeholder="Tóm tắt lộ trình và mục tiêu khóa học..."
+                className="w-full px-3 py-2.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 min-h-[100px] leading-relaxed resize-y"
+              />
+            </div>
 
             {/* Phân cấp nội dung động */}
             <HierarchyConfigEditor
@@ -563,36 +616,73 @@ function AdminSeriesContent() {
             </button>
           </div>
           <form onSubmit={handleUpdateSeries} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="text"
-                required
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="Tiêu đề khóa học..."
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
-              />
-              <select
-                value={editCategoryId}
-                onChange={(e) => setEditCategoryId(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
-              >
-                <option value="">-- Thuộc danh mục --</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                  Tiêu đề khóa học:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Tiêu đề khóa học..."
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                  Thuộc danh mục:
+                </label>
+                <select
+                  value={editCategoryId}
+                  onChange={(e) => setEditCategoryId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
+                >
+                  <option value="">-- Thuộc danh mục --</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 flex items-center justify-between">
+                  <span>Tác giả khóa học:</span>
+                  {editAuthorId && (
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                      Đã chọn
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={editAuthorId}
+                  onChange={(e) => setEditAuthorId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-white font-medium"
+                >
+                  <option value="">-- Chưa gán tác giả --</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name ? `${u.full_name} (@${u.username})` : u.username} {u.is_admin ? "⭐ (Admin)" : "• Thành viên"}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <textarea
-              rows={2}
-              value={editSummary}
-              onChange={(e) => setEditSummary(e.target.value)}
-              placeholder="Tóm tắt nội dung khóa học..."
-              className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
-            />
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                Mô tả khóa học:
+              </label>
+              <textarea
+                rows={5}
+                value={editSummary}
+                onChange={(e) => setEditSummary(e.target.value)}
+                placeholder="Tóm tắt nội dung và lộ trình khóa học..."
+                className="w-full px-3 py-2.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 min-h-[140px] leading-relaxed resize-y"
+              />
+            </div>
 
             {/* Phân cấp nội dung động cho edit */}
             <HierarchyConfigEditor
@@ -765,6 +855,14 @@ function AdminSeriesContent() {
                         <h3 className="font-bold text-sm text-stone-900 dark:text-white truncate">
                           {s.title}
                         </h3>
+                        {s.author && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                            <span className="truncate">
+                              Tác giả: <strong className="font-medium text-stone-700 dark:text-stone-300">{s.author.full_name || s.author.username}</strong>
+                            </span>
+                          </div>
+                        )}
                         {s.summary && (
                           <p className="text-xs text-stone-500 line-clamp-2">
                             {s.summary}
@@ -822,6 +920,14 @@ function AdminSeriesContent() {
                   <h3 className="font-bold text-base text-stone-900 dark:text-white">
                     {selectedDetail.title}
                   </h3>
+                  {selectedDetail.author && (
+                    <p className="text-xs text-stone-500 mt-1 flex items-center gap-1.5">
+                      <span>Tác giả:</span>
+                      <strong className="font-semibold text-stone-800 dark:text-stone-200">
+                        {selectedDetail.author.full_name || selectedDetail.author.username}
+                      </strong>
+                    </p>
+                  )}
                   <p className="text-xs text-stone-500 mt-0.5">
                     Thêm chương mới hoặc chỉnh sửa tên chương để thiết lập dàn bài học.
                   </p>
@@ -1094,8 +1200,10 @@ function AdminSeriesContent() {
 
 export default function AdminSeriesPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-xs text-stone-400">Đang tải quản lý khóa học...</div>}>
-      <AdminSeriesContent />
-    </Suspense>
+    <AdminGuard requireAdmin={true}>
+      <Suspense fallback={<div className="p-8 text-center text-xs text-stone-400">Đang tải quản lý khóa học...</div>}>
+        <AdminSeriesContent />
+      </Suspense>
+    </AdminGuard>
   );
 }

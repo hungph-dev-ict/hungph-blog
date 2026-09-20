@@ -23,6 +23,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useLoading } from "@/lib/loading-context";
 import {
   createPost,
   updatePost,
@@ -30,6 +31,7 @@ import {
   fetchCategories,
   createCategory,
   fetchSeries,
+  fetchWriteableSeries,
   fetchSeriesBySlug,
   uploadMedia,
   getFullImageUrl,
@@ -37,6 +39,7 @@ import {
 import { Category, Chapter, PostDetail, Series, SeriesDetail } from "@/lib/types";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { NotFoundState } from "@/components/common/NotFoundState";
 
 interface PostEditorFormProps {
   postId?: string;
@@ -56,7 +59,11 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, token, isLoading } = useAuth();
+  const { withLoading } = useLoading();
   const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const isAdmin = user?.role === "admin" || user?.is_admin;
+  const [isUnauthorized, setIsUnauthorized] = useState(false);
 
   // Form State
   const [title, setTitle] = useState("");
@@ -94,11 +101,15 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     }
   }, [user, isLoading, router]);
 
-  // Load categories & series
+  // Load categories & writeable series
   useEffect(() => {
     fetchCategories().then(setCategories).catch(console.error);
-    fetchSeries().then(setSeriesList).catch(console.error);
-  }, []);
+    if (token) {
+      fetchWriteableSeries(token).then(setSeriesList).catch(console.error);
+    } else {
+      fetchSeries().then(setSeriesList).catch(console.error);
+    }
+  }, [token]);
 
   // Pre-fill series and chapter from query params if new post
   useEffect(() => {
@@ -144,6 +155,11 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     setPageLoading(true);
     fetchPostById(postId, token)
       .then((data: PostDetail) => {
+        const postAuthorId = data.author?.id;
+        if (!isAdmin && postAuthorId && user?.id && postAuthorId !== user.id) {
+          setIsUnauthorized(true);
+          return;
+        }
         setTitle(data.title);
         setSlug(data.slug);
         setSummary(data.summary || "");
@@ -162,16 +178,16 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         alert(`Không thể tải bài viết: ${err.message}`);
         const qSeries = searchParams?.get("series_id");
         const qSlug = searchParams?.get("series_slug");
-        if (qSlug) {
+        if (isAdmin && qSlug) {
           router.push(`/admin/series?slug=${qSlug}`);
-        } else if (qSeries) {
+        } else if (isAdmin && qSeries) {
           router.push(`/admin/series?id=${qSeries}`);
         } else {
           router.push("/admin/posts");
         }
       })
       .finally(() => setPageLoading(false));
-  }, [postId, token, router, searchParams]);
+  }, [postId, token, router, searchParams, isAdmin, user?.id]);
 
   // Handle series selection & auto-inherit category
   const handleSeriesChange = (newSeriesId: string) => {
@@ -199,17 +215,21 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   const targetSeriesTitle = selectedSeries?.title || postSeriesDetail?.title || "";
   const isCoursePost = !!seriesId || !!searchParams?.get("series_id");
 
-  const backHref = targetSeriesSlug
-    ? `/admin/series?slug=${targetSeriesSlug}`
-    : seriesId
-    ? `/admin/series?id=${seriesId}`
-    : "/admin/posts";
+  const backHref = isAdmin
+    ? (targetSeriesSlug
+        ? `/admin/series?slug=${targetSeriesSlug}`
+        : seriesId
+        ? `/admin/series?id=${seriesId}`
+        : "/admin/posts")
+    : (targetSeriesSlug
+        ? `/series/${targetSeriesSlug}`
+        : "/admin/posts");
 
   const backTitle = targetSeriesTitle
-    ? `Quay lại khóa học "${targetSeriesTitle}"`
+    ? (isAdmin ? `Quay lại quản lý khóa học "${targetSeriesTitle}"` : `Xem khóa học "${targetSeriesTitle}"`)
     : isCoursePost
-    ? "Quay lại quản lý khóa học"
-    : "Quay lại danh sách bài viết";
+    ? (isAdmin ? "Quay lại quản lý khóa học" : "Quay lại danh sách bài viết")
+    : (isAdmin ? "Quay lại quản lý bài viết" : "Quay lại bài viết của tôi");
 
   const hierarchyLevels: string[] = React.useMemo(() => {
     const raw =
@@ -261,25 +281,29 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     const file = e.target.files?.[0];
     if (!file || !token) return;
 
-    try {
-      const res = await uploadMedia(file, token);
-      setCoverImage(res.url);
-    } catch (err: any) {
-      alert(`Lỗi upload ảnh cover: ${err.message}`);
-    }
+    await withLoading(async () => {
+      try {
+        const res = await uploadMedia(file, token);
+        setCoverImage(res.url);
+      } catch (err: any) {
+        alert(`Lỗi upload ảnh cover: ${err.message}`);
+      }
+    }, "Đang tải ảnh bìa lên...");
   };
 
   const handleAddCategory = async () => {
     if (!newCatName.trim() || !token) return;
-    try {
-      const newCat = await createCategory({ name: newCatName.trim() }, token);
-      setCategories((prev) => [...prev, newCat]);
-      setCategoryId(newCat.id);
-      setNewCatName("");
-      setShowNewCatModal(false);
-    } catch (err: any) {
-      alert(`Lỗi tạo danh mục: ${err.message}`);
-    }
+    await withLoading(async () => {
+      try {
+        const newCat = await createCategory({ name: newCatName.trim() }, token);
+        setCategories((prev) => [...prev, newCat]);
+        setCategoryId(newCat.id);
+        setNewCatName("");
+        setShowNewCatModal(false);
+      } catch (err: any) {
+        alert(`Lỗi tạo danh mục: ${err.message}`);
+      }
+    }, "Đang tạo chuyên mục mới...");
   };
 
   const handleSubmit = async (publishStatus: boolean) => {
@@ -327,35 +351,46 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
       is_published: publishStatus,
     };
 
-    try {
-      let savedPost: PostDetail;
-      if (postId) {
-        savedPost = await updatePost(postId, payload, token);
-      } else {
-        savedPost = await createPost(payload, token);
-      }
+    await withLoading(async () => {
+      try {
+        let savedPost: PostDetail;
+        if (postId) {
+          savedPost = await updatePost(postId, payload, token);
+        } else {
+          savedPost = await createPost(payload, token);
+        }
 
-      setSavedSlug(savedPost.slug);
-      setIsPublished(savedPost.is_published);
-      alert(
-        publishStatus
-          ? "🎉 Bài viết đã được xuất bản thành công!"
-          : "Đã lưu bài viết vào bản nháp!"
-      );
-      if (!postId) {
-        const queryParams = new URLSearchParams();
-        if (seriesId) queryParams.set("series_id", seriesId);
-        if (targetSeriesSlug) queryParams.set("series_slug", targetSeriesSlug);
-        const qs = queryParams.toString() ? `?${queryParams.toString()}` : "";
-        router.push(`/admin/editor/${savedPost.id}${qs}`);
+        setSavedSlug(savedPost.slug);
+        setIsPublished(savedPost.is_published);
+        alert(
+          publishStatus
+            ? "🎉 Bài viết đã được xuất bản thành công!"
+            : "Đã lưu bài viết vào bản nháp!"
+        );
+        if (!postId) {
+          const queryParams = new URLSearchParams();
+          if (seriesId) queryParams.set("series_id", seriesId);
+          if (targetSeriesSlug) queryParams.set("series_slug", targetSeriesSlug);
+          const qs = queryParams.toString() ? `?${queryParams.toString()}` : "";
+          router.push(`/admin/editor/${savedPost.id}${qs}`);
+        }
+      } catch (err: any) {
+        alert(`Lỗi khi lưu bài viết: ${err.message}`);
+      } finally {
+        setLoading(false);
+        setActionType(null);
       }
-    } catch (err: any) {
-      alert(`Lỗi khi lưu bài viết: ${err.message}`);
-    } finally {
-      setLoading(false);
-      setActionType(null);
-    }
+    }, publishStatus ? "Đang xuất bản bài viết..." : "Đang lưu bài viết...");
   };
+
+  if (isUnauthorized) {
+    return (
+      <NotFoundState
+        title="Không tìm thấy bài viết"
+        description="Bài viết không tồn tại hoặc bạn không có quyền truy cập chỉnh sửa nội dung này."
+      />
+    );
+  }
 
   if (pageLoading) {
     return (
@@ -369,7 +404,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     <div className="w-full space-y-4 pb-20">
       <Breadcrumbs
         items={[
-          { label: "Quản trị", href: "/admin/posts" },
+          { label: isAdmin ? "Quản trị" : "Tài khoản", href: "/admin/posts" },
           ...(isCoursePost
             ? [
                 {
@@ -628,15 +663,21 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
 
                           {isEnabled && availableChapters.length === 0 && (
                             <p className="text-[10px] text-amber-600 dark:text-amber-400 pl-1 italic">
-                              Chưa có {lvlName} nào được tạo thuộc mục trên. Vui lòng vào{" "}
-                              <Link
-                                href={`/admin/series`}
-                                target="_blank"
-                                className="underline font-semibold"
-                              >
-                                Quản lý Khóa học
-                              </Link>{" "}
-                              để tạo {lvlName}!
+                              Chưa có {lvlName} nào được tạo thuộc mục trên. {isAdmin ? (
+                                <>
+                                  Vui lòng vào{" "}
+                                  <Link
+                                    href={`/admin/series`}
+                                    target="_blank"
+                                    className="underline font-semibold"
+                                  >
+                                    Quản lý Khóa học
+                                  </Link>{" "}
+                                  để tạo {lvlName}!
+                                </>
+                              ) : (
+                                `Vui lòng liên hệ Quản trị viên để tạo thêm ${lvlName}.`
+                              )}
                             </p>
                           )}
                         </div>

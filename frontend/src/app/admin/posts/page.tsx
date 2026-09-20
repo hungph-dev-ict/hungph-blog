@@ -27,10 +27,13 @@ import { fetchPosts, deletePost, updatePost, fetchCategories } from "@/lib/api";
 import { Category, PostListItem } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { AdminGuard } from "@/components/admin/AdminGuard";
+import { useLoading } from "@/lib/loading-context";
 
 export default function AdminPostsPage() {
   const router = useRouter();
   const { user, token, isLoading } = useAuth();
+  const { withLoading } = useLoading();
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,17 +54,19 @@ export default function AdminPostsPage() {
   const isAdmin = user?.role === "admin" || user?.is_admin;
   const isProcessing = Boolean(actionLoadingId);
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/");
-    }
-  }, [user, isLoading, router]);
-
   const loadAllPosts = async () => {
+    if (!token) return;
     setLoading(true);
     try {
       const [postsData, catsData] = await Promise.all([
-        fetchPosts({ limit: 100, include_drafts: true }),
+        fetchPosts(
+          {
+            limit: 100,
+            include_drafts: true,
+            author_id: isAdmin ? undefined : user?.id,
+          },
+          token
+        ),
         fetchCategories(),
       ]);
       setPosts(postsData.items);
@@ -74,10 +79,10 @@ export default function AdminPostsPage() {
   };
 
   useEffect(() => {
-    if (token) {
+    if (token && user) {
       loadAllPosts();
     }
-  }, [token]);
+  }, [token, user?.id, isAdmin]);
 
   // Handle Delete Post
   const handleDelete = async (id: string, title: string) => {
@@ -85,14 +90,16 @@ export default function AdminPostsPage() {
     if (!window.confirm(`Bạn có chắc muốn xóa bài viết "${title}" không?`)) return;
 
     setActionLoadingId(id);
-    try {
-      await deletePost(id, token);
-      setPosts((prev) => prev.filter((p) => p.id !== id));
-    } catch (err: any) {
-      alert(`Lỗi khi xóa bài viết: ${err.message}`);
-    } finally {
-      setActionLoadingId(null);
-    }
+    await withLoading(async () => {
+      try {
+        await deletePost(id, token);
+        setPosts((prev) => prev.filter((p) => p.id !== id));
+      } catch (err: any) {
+        alert(`Lỗi khi xóa bài viết: ${err.message}`);
+      } finally {
+        setActionLoadingId(null);
+      }
+    }, "Đang xóa bài viết...");
   };
 
   // Handle Toggle Publish/Draft
@@ -104,24 +111,26 @@ export default function AdminPostsPage() {
     if (!window.confirm(`Bạn có muốn ${actionLabel} bài viết "${post.title}"?`)) return;
 
     setActionLoadingId(post.id);
-    try {
-      const updated = await updatePost(
-        post.id,
-        {
-          title: post.title,
-          content_html: "", // Keep unchanged on backend if empty/optional
-          is_published: targetStatus,
-        },
-        token
-      );
-      setPosts((prev) =>
-        prev.map((p) => (p.id === post.id ? { ...p, is_published: updated.is_published } : p))
-      );
-    } catch (err: any) {
-      alert(`Lỗi khi ${actionLabel}: ${err.message}`);
-    } finally {
-      setActionLoadingId(null);
-    }
+    await withLoading(async () => {
+      try {
+        const updated = await updatePost(
+          post.id,
+          {
+            title: post.title,
+            content_html: "", // Keep unchanged on backend if empty/optional
+            is_published: targetStatus,
+          },
+          token
+        );
+        setPosts((prev) =>
+          prev.map((p) => (p.id === post.id ? { ...p, is_published: updated.is_published } : p))
+        );
+      } catch (err: any) {
+        alert(`Lỗi khi ${actionLabel}: ${err.message}`);
+      } finally {
+        setActionLoadingId(null);
+      }
+    }, targetStatus ? "Đang xuất bản bài viết..." : "Đang chuyển bài viết về bản nháp...");
   };
 
   // Filter & Sort computation
@@ -193,44 +202,37 @@ export default function AdminPostsPage() {
   const startPost = totalPosts === 0 ? 0 : (validPage - 1) * pageSize + 1;
   const endPost = Math.min(validPage * pageSize, totalPosts);
 
-  if (isLoading || !user) {
-    return (
-      <div className="py-20 text-center text-sm text-stone-500 animate-pulse">
-        Đang kiểm tra quyền truy cập...
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full space-y-6 pb-16">
-      <Breadcrumbs
-        items={[
-          { label: "Quản trị", href: "/admin/posts" },
-          { label: isAdmin ? "Quản lý bài viết" : "Bài viết của tôi" },
-        ]}
-      />
+    <AdminGuard requireAdmin={false}>
+      <div className="w-full space-y-6 pb-16">
+        <Breadcrumbs
+          items={[
+            { label: isAdmin ? "Quản trị" : "Tài khoản", href: "/admin/posts" },
+            { label: isAdmin ? "Quản lý bài viết" : "Bài viết của tôi" },
+          ]}
+        />
 
-      {/* Top Bar Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-6">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white">
-              {isAdmin ? "Quản Lý Bài Viết" : "Bài Viết Của Tôi"}
-            </h1>
-            <span
-              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                isAdmin
-                  ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
-                  : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300"
-              }`}
-            >
-              {isAdmin ? "Admin" : "Thành viên"}
-            </span>
+        {/* Top Bar Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white">
+                {isAdmin ? "Quản Lý Bài Viết" : "Bài Viết Của Tôi"}
+              </h1>
+              <span
+                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                  isAdmin
+                    ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                    : "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                }`}
+              >
+                {isAdmin ? "Admin" : "Thành viên"}
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-stone-500 mt-1">
+              Xin chào <span className="font-semibold text-blue-600">{user?.full_name || user?.username}</span>! {isAdmin ? "Toàn bộ hệ thống hiện có " : "Bạn đang có "}<span className="font-bold text-stone-900 dark:text-white">{posts.length}</span> bài viết.
+            </p>
           </div>
-          <p className="text-xs sm:text-sm text-stone-500 mt-1">
-            Xin chào <span className="font-semibold text-blue-600">{user.full_name || user.username}</span>! Toàn bộ hệ thống hiện có <span className="font-bold text-stone-900 dark:text-white">{posts.length}</span> bài viết.
-          </p>
-        </div>
 
         {/* Unified Admin Nav Tab Bar with Highlight and Disable on Active Tab */}
         <AdminNav
@@ -406,7 +408,7 @@ export default function AdminPostsPage() {
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800/60">
                 {paginatedPosts.map((post) => {
-                  const canManage = isAdmin || post.author?.id === user.id;
+                  const canManage = isAdmin || (!!user?.id && post.author?.id === user.id);
                   const isItemLoading = actionLoadingId === post.id;
 
                   return (
@@ -582,5 +584,6 @@ export default function AdminPostsPage() {
         </div>
       )}
     </div>
+    </AdminGuard>
   );
 }

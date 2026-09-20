@@ -117,7 +117,7 @@ class SeriesBase(BaseModel):
 
 
 class SeriesCreate(SeriesBase):
-    pass
+    author_id: Optional[str] = None
 
 
 class SeriesUpdate(BaseModel):
@@ -129,6 +129,7 @@ class SeriesUpdate(BaseModel):
     category_id: Optional[str] = None
     hierarchy_config: Optional[str] = None
     attribution_text: Optional[str] = None
+    author_id: Optional[str] = None
 
 
 class SeriesBrief(BaseModel):
@@ -146,6 +147,7 @@ class SeriesResponse(SeriesBase):
     created_at: datetime
     category: Optional[CategoryResponse] = None
     author: Optional[AuthorBrief] = None
+    author_id: Optional[str] = None
     total_chapters: int = 0
     total_lessons: int = 0
     total_reading_time_minutes: int = 0

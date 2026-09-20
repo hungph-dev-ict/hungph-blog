@@ -23,10 +23,13 @@ import {
 import { Category } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { AdminGuard } from "@/components/admin/AdminGuard";
+import { useLoading } from "@/lib/loading-context";
 
 export default function AdminCategoriesPage() {
   const router = useRouter();
   const { user, token, isLoading } = useAuth();
+  const { withLoading } = useLoading();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,12 +51,11 @@ export default function AdminCategoriesPage() {
   }, [user, isLoading, router]);
 
   const loadData = async () => {
-    setLoading(true);
     try {
       const data = await fetchCategories();
       setCategories(data);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -68,17 +70,19 @@ export default function AdminCategoriesPage() {
     if (!name.trim() || !token) return;
 
     setSubmitting(true);
-    try {
-      const newCat = await createCategory({ name: name.trim(), description }, token);
-      setCategories((prev) => [...prev, newCat]);
-      setName("");
-      setDescription("");
-      alert("Đã tạo danh mục mới thành công!");
-    } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
-    } finally {
-      setSubmitting(false);
-    }
+    await withLoading(async () => {
+      try {
+        const newCat = await createCategory({ name: name.trim(), description }, token);
+        setCategories((prev) => [...prev, newCat]);
+        setName("");
+        setDescription("");
+        alert("Đã tạo danh mục mới thành công!");
+      } catch (err: any) {
+        alert(`Lỗi: ${err.message}`);
+      } finally {
+        setSubmitting(false);
+      }
+    }, "Đang tạo danh mục mới...");
   };
 
   const startEdit = (cat: Category) => {
@@ -89,29 +93,33 @@ export default function AdminCategoriesPage() {
 
   const handleUpdate = async (id: string) => {
     if (!editName.trim() || !token) return;
-    try {
-      const updated = await updateCategory(
-        id,
-        { name: editName.trim(), description: editDescription.trim() },
-        token
-      );
-      setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
-      setEditingId(null);
-    } catch (err: any) {
-      alert(`Lỗi cập nhật: ${err.message}`);
-    }
+    await withLoading(async () => {
+      try {
+        const updated = await updateCategory(
+          id,
+          { name: editName.trim(), description: editDescription.trim() },
+          token
+        );
+        setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
+        setEditingId(null);
+      } catch (err: any) {
+        alert(`Lỗi cập nhật: ${err.message}`);
+      }
+    }, "Đang cập nhật danh mục...");
   };
 
   const handleDelete = async (id: string, catName: string) => {
     if (!token) return;
     if (!window.confirm(`Bạn có chắc muốn xóa danh mục "${catName}" không?`)) return;
 
-    try {
-      await deleteCategory(id, token);
-      setCategories((prev) => prev.filter((c) => c.id !== id));
-    } catch (err: any) {
-      alert(`Lỗi xóa danh mục: ${err.message}`);
-    }
+    await withLoading(async () => {
+      try {
+        await deleteCategory(id, token);
+        setCategories((prev) => prev.filter((c) => c.id !== id));
+      } catch (err: any) {
+        alert(`Lỗi xóa danh mục: ${err.message}`);
+      }
+    }, "Đang xóa danh mục...");
   };
 
   if (isLoading || !user) {
@@ -119,7 +127,8 @@ export default function AdminCategoriesPage() {
   }
 
   return (
-    <div className="w-full space-y-6 pb-16">
+    <AdminGuard requireAdmin={true}>
+      <div className="w-full space-y-6 pb-16">
       <Breadcrumbs
         items={[
           { label: "Quản trị", href: "/admin/posts" },
@@ -301,6 +310,7 @@ export default function AdminCategoriesPage() {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </AdminGuard>
   );
 }

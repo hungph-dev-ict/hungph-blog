@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { fetchComments, createComment, deleteComment, updateComment } from "@/lib/api";
 import { Comment } from "@/lib/types";
 import { GoogleLoginButton } from "@/components/common/GoogleLoginButton";
+import { useLoading } from "@/lib/loading-context";
 
 interface CommentSectionProps {
   postId: string;
@@ -13,6 +14,7 @@ interface CommentSectionProps {
 
 export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
   const { user, token, logout } = useAuth();
+  const { withLoading } = useLoading();
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,41 +58,45 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
     }
 
     setSubmitting(true);
-    try {
-      await createComment(
-        postId,
-        {
-          content: commentText,
-          author_name: user?.full_name || user?.username || authorName.trim() || undefined,
-          author_email: user?.email || authorEmail.trim() || undefined,
-          parent_id: parentId,
-        },
-        token
-      );
+    await withLoading(async () => {
+      try {
+        await createComment(
+          postId,
+          {
+            content: commentText,
+            author_name: user?.full_name || user?.username || authorName.trim() || undefined,
+            author_email: user?.email || authorEmail.trim() || undefined,
+            parent_id: parentId,
+          },
+          token
+        );
 
-      if (parentId) {
-        setReplyContent("");
-        setReplyToId(null);
-      } else {
-        setContent("");
+        if (parentId) {
+          setReplyContent("");
+          setReplyToId(null);
+        } else {
+          setContent("");
+        }
+        await loadComments();
+      } catch (err: any) {
+        alert(`Lỗi: ${err.message}`);
+      } finally {
+        setSubmitting(false);
       }
-      await loadComments();
-    } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
-    } finally {
-      setSubmitting(false);
-    }
+    }, "Đang gửi bình luận...");
   };
 
   const handleDelete = async (commentId: string) => {
     if (!token) return;
     if (!window.confirm("Bạn có chắc muốn thu hồi bình luận này?")) return;
-    try {
-      await deleteComment(commentId, token);
-      await loadComments();
-    } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
-    }
+    await withLoading(async () => {
+      try {
+        await deleteComment(commentId, token);
+        await loadComments();
+      } catch (err: any) {
+        alert(`Lỗi: ${err.message}`);
+      }
+    }, "Đang xóa bình luận...");
   };
 
   const handleStartEdit = (c: Comment) => {
@@ -106,16 +112,18 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
   const handleSaveEdit = async (commentId: string) => {
     if (!token || !editContent.trim()) return;
     setEditSubmitting(true);
-    try {
-      await updateComment(commentId, editContent.trim(), token);
-      setEditingId(null);
-      setEditContent("");
-      await loadComments();
-    } catch (err: any) {
-      alert(`Lỗi khi cập nhật bình luận: ${err.message}`);
-    } finally {
-      setEditSubmitting(false);
-    }
+    await withLoading(async () => {
+      try {
+        await updateComment(commentId, editContent.trim(), token);
+        setEditingId(null);
+        setEditContent("");
+        await loadComments();
+      } catch (err: any) {
+        alert(`Lỗi khi cập nhật bình luận: ${err.message}`);
+      } finally {
+        setEditSubmitting(false);
+      }
+    }, "Đang lưu bình luận...");
   };
 
   const canModify = (c: Comment) => {

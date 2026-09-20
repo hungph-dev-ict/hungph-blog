@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth-context";
 import { buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
 
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { useLoading } from "@/lib/loading-context";
 
 interface SeriesDetailClientProps {
   initialSeries: SeriesDetail;
@@ -29,6 +30,7 @@ interface SeriesDetailClientProps {
 export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialSeries: series }) => {
   const router = useRouter();
   const { user, token } = useAuth();
+  const { withLoading } = useLoading();
   const [showCollabModal, setShowCollabModal] = useState(false);
   const [collabMessage, setCollabMessage] = useState("");
   const [collabSubmitting, setCollabSubmitting] = useState(false);
@@ -59,19 +61,21 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
     }
     setCollabSubmitting(true);
     setCollabError("");
-    try {
-      await requestCollaboration(series.id, collabMessage.trim() || undefined, token);
-      setCollabSuccess(true);
-      setTimeout(() => {
-        setShowCollabModal(false);
-        setCollabSuccess(false);
-        setCollabMessage("");
-      }, 2500);
-    } catch (err: unknown) {
-      setCollabError(err instanceof Error ? err.message : "Gửi yêu cầu thất bại");
-    } finally {
-      setCollabSubmitting(false);
-    }
+    await withLoading(async () => {
+      try {
+        await requestCollaboration(series.id, collabMessage.trim() || undefined, token);
+        setCollabSuccess(true);
+        setTimeout(() => {
+          setShowCollabModal(false);
+          setCollabSuccess(false);
+          setCollabMessage("");
+        }, 2500);
+      } catch (err: unknown) {
+        setCollabError(err instanceof Error ? err.message : "Gửi yêu cầu thất bại");
+      } finally {
+        setCollabSubmitting(false);
+      }
+    }, "Đang gửi yêu cầu cộng tác...");
   };
 
   // Find first lesson for the "Start Course" button

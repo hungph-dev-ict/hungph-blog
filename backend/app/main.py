@@ -72,6 +72,39 @@ async def init_default_data():
                 await db.commit()
             await db.refresh(admin)
 
+        # Kiểm tra Thành viên mẫu (Demo Member) phục vụ kiểm thử phân quyền
+        stmt_member = select(User).where(User.username == "member_demo")
+        res_member = await db.execute(stmt_member)
+        member = res_member.scalar_one_or_none()
+        if not member:
+            member = User(
+                email="member@hungph.dev",
+                username="member_demo",
+                full_name="Thành Viên Demo",
+                hashed_password=get_password_hash("Member@123456"),
+                role="member",
+                is_admin=False,
+                is_active=True
+            )
+            db.add(member)
+            await db.commit()
+            await db.refresh(member)
+        else:
+            member.hashed_password = get_password_hash("Member@123456")
+            member.role = "member"
+            member.is_admin = False
+            await db.commit()
+
+        # Gán tác giả mặc định cho bất kỳ series nào chưa có owner_id
+        if admin:
+            from sqlalchemy import update
+            await db.execute(
+                update(Series)
+                .where(Series.owner_id.is_(None))
+                .values(owner_id=admin.id)
+            )
+            await db.commit()
+
         # Kiểm tra Category mẫu
         stmt_cat = select(Category)
         res_cat = await db.execute(stmt_cat)

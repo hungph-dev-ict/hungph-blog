@@ -6,6 +6,7 @@ import Link from "next/link";
 import { fetchCategories, fetchPosts, fetchLatestSeries, getFullCourseImageUrl, getFullImageUrl } from "@/lib/api";
 import { Category, PaginatedPosts, Series } from "@/lib/types";
 import { PostCard } from "@/components/blog/PostCard";
+import { useLoading } from "@/lib/loading-context";
 
 function formatCourseDuration(minutes?: number) {
   if (!minutes || minutes <= 0) return null;
@@ -17,6 +18,7 @@ function formatCourseDuration(minutes?: number) {
 }
 
 export default function HomePage() {
+  const { withLoading } = useLoading();
   const [postsData, setPostsData] = useState<PaginatedPosts | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [latestSeries, setLatestSeries] = useState<Series | null>(null);
@@ -26,26 +28,39 @@ export default function HomePage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [seriesLoading, setSeriesLoading] = useState<boolean>(true);
 
-  const loadPosts = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchPosts({
-        page: currentPage,
-        limit: 8,
-        category: selectedCategory || undefined,
-        search: searchQuery || undefined,
-      });
-      // Sort by published_at or created_at descending (newest first)
-      data.items = data.items.sort((a, b) => {
-        const dateA = new Date(a.published_at || a.created_at).getTime();
-        const dateB = new Date(b.published_at || b.created_at).getTime();
-        return dateB - dateA;
-      });
-      setPostsData(data);
-    } catch (err) {
-      console.error("Lỗi tải bài viết:", err);
-    } finally {
-      setLoading(false);
+  const loadPosts = async (
+    targetPage = currentPage,
+    targetCategory = selectedCategory,
+    targetSearch = searchQuery,
+    overlayMessage?: string
+  ) => {
+    const fetcher = async () => {
+      setLoading(true);
+      try {
+        const data = await fetchPosts({
+          page: targetPage,
+          limit: 8,
+          category: targetCategory || undefined,
+          search: targetSearch || undefined,
+        });
+        // Sort by published_at or created_at descending (newest first)
+        data.items = data.items.sort((a, b) => {
+          const dateA = new Date(a.published_at || a.created_at).getTime();
+          const dateB = new Date(b.published_at || b.created_at).getTime();
+          return dateB - dateA;
+        });
+        setPostsData(data);
+      } catch (err) {
+        console.error("Lỗi tải bài viết:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (overlayMessage) {
+      await withLoading(fetcher, overlayMessage);
+    } else {
+      await fetcher();
     }
   };
 
@@ -59,13 +74,27 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    loadPosts();
+    loadPosts(currentPage, selectedCategory, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, currentPage]);
+
+  const handleSelectCategory = (catSlug: string) => {
+    if (selectedCategory === catSlug) return;
+    setSelectedCategory(catSlug);
+    setCurrentPage(1);
+    loadPosts(1, catSlug, searchQuery, catSlug ? "Đang lọc bài viết..." : "Đang tải tất cả bài viết...");
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    loadPosts(newPage, selectedCategory, searchQuery, `Đang tải trang ${newPage}...`);
+    window.scrollTo({ top: 350, behavior: "smooth" });
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1);
-    loadPosts();
+    loadPosts(1, selectedCategory, searchQuery, "Đang tìm kiếm bài viết...");
   };
 
   return (
@@ -205,7 +234,7 @@ export default function HomePage() {
           </div>
           {selectedCategory && (
             <button
-              onClick={() => setSelectedCategory("")}
+              onClick={() => handleSelectCategory("")}
               className="text-xs text-blue-600 hover:underline"
             >
               Xóa bộ lọc
@@ -215,10 +244,7 @@ export default function HomePage() {
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => {
-              setSelectedCategory("");
-              setCurrentPage(1);
-            }}
+            onClick={() => handleSelectCategory("")}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${selectedCategory === ""
                 ? "bg-stone-900 dark:bg-white text-white dark:text-stone-900 shadow-sm"
                 : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700"
@@ -229,10 +255,7 @@ export default function HomePage() {
           {categories.map((cat) => (
             <button
               key={cat.id}
-              onClick={() => {
-                setSelectedCategory(cat.slug);
-                setCurrentPage(1);
-              }}
+              onClick={() => handleSelectCategory(cat.slug)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${selectedCategory === cat.slug
                   ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20"
                   : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700"
@@ -301,7 +324,7 @@ export default function HomePage() {
           <div className="flex items-center justify-center gap-2 pt-8">
             <button
               disabled={currentPage <= 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
               className="px-3.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs font-semibold disabled:opacity-40 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
             >
               Trang trước
@@ -311,7 +334,7 @@ export default function HomePage() {
             </span>
             <button
               disabled={currentPage >= postsData.total_pages}
-              onClick={() => setCurrentPage((p) => Math.min(postsData.total_pages, p + 1))}
+              onClick={() => handlePageChange(Math.min(postsData.total_pages, currentPage + 1))}
               className="px-3.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs font-semibold disabled:opacity-40 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
             >
               Trang tiếp

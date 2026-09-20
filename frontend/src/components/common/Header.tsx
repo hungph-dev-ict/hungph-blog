@@ -265,29 +265,21 @@ export const Header: React.FC = () => {
                 )}
               </Link>
 
-              <Link
-                href="/admin/posts"
-                className="text-xs font-semibold px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shrink-0"
-              >
-                {isAdmin ? "Quản trị" : "Bài viết"}
-              </Link>
-
-              {isAdmin && (
-                <>
-                  <Link
-                    href="/admin/users"
-                    className="hidden lg:inline-flex text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800/80 bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition-colors"
-                  >
-                    Thành viên
-                  </Link>
-                  <Link
-                    href="/admin/reports"
-                    title="Tố cáo"
-                    className="hidden lg:inline-flex p-1.5 rounded-lg text-stone-400 hover:text-rose-600 transition-colors"
-                  >
-                    <Flag className="w-4 h-4" />
-                  </Link>
-                </>
+              {/* Nút Quản lý: Khi đang ở bất kỳ trang admin nào (/admin/*) thì hiển thị màu tím và disable theo phương châm UI thống nhất */}
+              {pathname.startsWith("/admin") ? (
+                <span
+                  aria-current="page"
+                  className="inline-flex items-center text-xs font-bold px-2.5 py-1.5 rounded-xl border border-purple-300 dark:border-purple-800 bg-purple-100/90 dark:bg-purple-950/70 text-purple-800 dark:text-purple-200 shadow-xs cursor-default pointer-events-none select-none shrink-0"
+                >
+                  Quản lý
+                </span>
+              ) : (
+                <Link
+                  href="/admin/posts"
+                  className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shrink-0"
+                >
+                  {isAdmin ? "Quản lý" : "Bài viết"}
+                </Link>
               )}
 
               <button

@@ -29,6 +29,8 @@ import { CommentSection } from "@/components/blog/CommentSection";
 import { useAuth } from "@/lib/auth-context";
 
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { useLoading } from "@/lib/loading-context";
+import { buildChapterTree, ChapterNode } from "@/lib/tree-utils";
 
 interface PostDetailClientProps {
   initialPost: PostDetail;
@@ -37,6 +39,7 @@ interface PostDetailClientProps {
 export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost: post }) => {
   const router = useRouter();
   const { user, token } = useAuth();
+  const { withLoading } = useLoading();
   const [copied, setCopied] = useState<boolean>(false);
   const [liked, setLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
@@ -47,11 +50,30 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
   const [reportLoading, setReportLoading] = useState(false);
   const [reportDone, setReportDone] = useState(false);
 
+  const levels = React.useMemo(() => {
+    try {
+      if (post.series_outline?.hierarchy_config) {
+        const parsed = JSON.parse(post.series_outline.hierarchy_config);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return ["Chương"];
+  }, [post.series_outline?.hierarchy_config]);
+
+  const chapterTree = React.useMemo(() => {
+    if (!post.series_outline?.chapters) return [];
+    return buildChapterTree(post.series_outline.chapters, levels);
+  }, [post.series_outline?.chapters, levels]);
+
   useEffect(() => {
-    getLikeStatus(post.id, token || undefined).then((s) => {
-      setLiked(s.liked);
-      setLikesCount(s.likes_count);
-    }).catch(() => {});
+    getLikeStatus(post.id, token || undefined)
+      .then((s) => {
+        setLiked(s.liked);
+        if (s.likes_count !== undefined) {
+          setLikesCount(s.likes_count);
+        }
+      })
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id, token]);
 
@@ -72,15 +94,17 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
     if (!user || !token) { alert("Vui lòng đăng nhập để tố cáo"); return; }
     if (!reportReason) { alert("Vui lòng chọn lý do"); return; }
     setReportLoading(true);
-    try {
-      await reportPost(post.id, reportReason, reportDesc || undefined, token);
-      setReportDone(true);
-      setTimeout(() => { setShowReport(false); setReportDone(false); setReportReason(""); setReportDesc(""); }, 2000);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Lỗi không xác định");
-    } finally {
-      setReportLoading(false);
-    }
+    await withLoading(async () => {
+      try {
+        await reportPost(post.id, reportReason, reportDesc || undefined, token);
+        setReportDone(true);
+        setTimeout(() => { setShowReport(false); setReportDone(false); setReportReason(""); setReportDesc(""); }, 2000);
+      } catch (e: unknown) {
+        alert(e instanceof Error ? e.message : "Lỗi không xác định");
+      } finally {
+        setReportLoading(false);
+      }
+    }, "Đang gửi báo cáo bài viết...");
   };
 
   const copyShareLink = () => {
@@ -460,38 +484,112 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
           <aside className="lg:col-span-4 space-y-8">
             <div className="sticky top-24 space-y-6">
               {/* Course Outline Sidebar (nếu có) */}
-              {post.series_outline && (
+              {post.series_outline && chapterTree.length > 0 && (
                 <div className="p-5 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 bg-white dark:bg-stone-900/70 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                    <Layers className="w-4 h-4" />
-                    <span>Lộ trình bài giảng</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                      <Layers className="w-4 h-4" />
+                      <span>Lộ trình bài giảng</span>
+                    </div>
+                    <span className="text-[11px] text-stone-400 font-medium">
+                      {post.series_outline.total_lessons} bài
+                    </span>
                   </div>
 
-                  <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1 text-xs">
-                    {post.series_outline.chapters.map((chap, cIdx) => (
-                      <div key={chap.id} className="space-y-1.5">
-                        <div className="font-semibold text-stone-700 dark:text-stone-300">
-                          {cIdx + 1}. {chap.title}
+                  <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1 text-xs divide-y divide-stone-100 dark:divide-stone-800/60">
+                    {chapterTree.map((rootNode) => (
+                      <div key={rootNode.id} className="pt-3 first:pt-0 space-y-2">
+                        {/* Cấp to (Level 1: Chương / Phần) */}
+                        <div className="font-bold text-stone-900 dark:text-stone-100 text-xs flex items-baseline gap-1.5">
+                          <span className="text-blue-600 dark:text-blue-400 font-semibold shrink-0">
+                            {levels[0] || "Chương"} {rootNode.displayNumber}.
+                          </span>
+                          <span className="leading-snug">{rootNode.title}</span>
                         </div>
-                        <ul className="space-y-1 pl-3 border-l border-stone-200 dark:border-stone-800">
-                          {chap.lessons?.map((les) => {
-                            const isCurrent = les.slug === post.slug;
-                            return (
-                              <li key={les.id}>
-                                <Link
-                                  href={`/posts/${les.slug}`}
-                                  className={`block py-1 px-2 rounded-lg transition-colors ${
-                                    isCurrent
-                                      ? "font-bold bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400"
-                                      : "text-stone-500 hover:text-stone-900 dark:hover:text-white"
-                                  }`}
-                                >
-                                  {les.title}
-                                </Link>
-                              </li>
-                            );
-                          })}
-                        </ul>
+
+                        {/* Bài viết trực tiếp thuộc Cấp to (nếu có) */}
+                        {rootNode.lessons && rootNode.lessons.length > 0 && (
+                          <ul className="space-y-1 pl-3 border-l-2 border-stone-200 dark:border-stone-800 ml-1">
+                            {rootNode.lessons.map((les, lIdx) => {
+                              const isCurrent = les.slug === post.slug;
+                              return (
+                                <li key={les.id}>
+                                  <Link
+                                    href={`/posts/${les.slug}`}
+                                    className={`group flex items-center justify-between py-1 px-2 rounded-lg transition-colors text-xs ${
+                                      isCurrent
+                                        ? "font-bold bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60"
+                                        : "text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-50 dark:hover:bg-stone-800/50"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      {isCurrent ? (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 shrink-0" />
+                                      ) : (
+                                        <span className="text-[10px] text-stone-400 shrink-0">
+                                          {rootNode.displayNumber}.{lIdx + 1}
+                                        </span>
+                                      )}
+                                      <span className="truncate">{les.title}</span>
+                                    </div>
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+
+                        {/* Cấp bé hơn (Sub-chapters: Module / Bài / Mục) */}
+                        {rootNode.children && rootNode.children.length > 0 && (
+                          <div className="space-y-2.5 pl-2.5 ml-1 border-l-2 border-stone-200/80 dark:border-stone-800">
+                            {rootNode.children.map((subNode) => {
+                              const subLevelName = levels[(subNode.level || 2) - 1] || "Mục";
+                              return (
+                                <div key={subNode.id} className="space-y-1.5 pl-1">
+                                  {/* Cấp bé header */}
+                                  <div className="font-semibold text-stone-700 dark:text-stone-300 text-[11px] flex items-baseline gap-1.5">
+                                    <span className="text-blue-500/80 dark:text-blue-400/80 font-medium shrink-0">
+                                      {subLevelName} {subNode.displayNumber}:
+                                    </span>
+                                    <span className="leading-snug">{subNode.title}</span>
+                                  </div>
+
+                                  {/* Bài viết thuộc cấp bé */}
+                                  {subNode.lessons && subNode.lessons.length > 0 && (
+                                    <ul className="space-y-1 pl-2.5 border-l border-blue-200/60 dark:border-blue-900/50 ml-1">
+                                      {subNode.lessons.map((les, lIdx) => {
+                                        const isCurrent = les.slug === post.slug;
+                                        return (
+                                          <li key={les.id}>
+                                            <Link
+                                              href={`/posts/${les.slug}`}
+                                              className={`group flex items-center justify-between py-1 px-2 rounded-lg transition-colors text-xs ${
+                                                isCurrent
+                                                  ? "font-bold bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60"
+                                                  : "text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-50 dark:hover:bg-stone-800/50"
+                                              }`}
+                                            >
+                                              <div className="flex items-center gap-1.5 min-w-0">
+                                                {isCurrent ? (
+                                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 shrink-0" />
+                                                ) : (
+                                                  <span className="text-[10px] text-stone-400 shrink-0">
+                                                    {subNode.displayNumber}.{lIdx + 1}
+                                                  </span>
+                                                )}
+                                                <span className="truncate">{les.title}</span>
+                                              </div>
+                                            </Link>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

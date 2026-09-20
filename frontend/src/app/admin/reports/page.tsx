@@ -7,6 +7,8 @@ import { PostReport, REPORT_REASONS } from "@/lib/types";
 import { Flag, CheckCircle, XCircle, AlertCircle, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { AdminNav } from "@/components/admin/AdminNav";
+import { AdminGuard } from "@/components/admin/AdminGuard";
 
 const STATUS_CONFIG = {
   pending: { label: "Chờ xét", color: "text-amber-600 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800", icon: Clock },
@@ -27,13 +29,11 @@ export default function AdminReportsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!user || !(user.is_admin || user.role === "admin")) {
-      router.push("/");
-      return;
+    if (token && (user?.is_admin || user?.role === "admin")) {
+      loadReports();
     }
-    loadReports();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, token, user]);
 
   const loadReports = async () => {
     if (!token) return;
@@ -63,9 +63,10 @@ export default function AdminReportsPage() {
   const pendingCount = reports.filter((r) => r.status === "pending").length;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-10">
+    <AdminGuard requireAdmin={true}>
+      <div className="max-w-5xl mx-auto px-4 py-10">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 flex items-center justify-center shadow-lg">
             <Flag className="w-5 h-5 text-white" />
@@ -78,18 +79,20 @@ export default function AdminReportsPage() {
           </div>
         </div>
 
-        {/* Filter */}
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="text-sm px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Tất cả</option>
-          <option value="pending">Chờ xét</option>
-          <option value="reviewed">Đã xem</option>
-          <option value="dismissed">Bỏ qua</option>
-          <option value="action_taken">Đã xử lý</option>
-        </select>
+        <div className="flex items-center gap-3">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="text-xs px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Tất cả</option>
+            <option value="pending">Chờ xét</option>
+            <option value="reviewed">Đã xem</option>
+            <option value="dismissed">Bỏ qua</option>
+            <option value="action_taken">Đã xử lý</option>
+          </select>
+          <AdminNav currentTab="reports" />
+        </div>
       </div>
 
       {loading ? (
@@ -202,6 +205,7 @@ export default function AdminReportsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </AdminGuard>
   );
 }
