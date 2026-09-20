@@ -393,10 +393,6 @@ function AdminSeriesContent() {
     }, "Đang xóa chương học...");
   };
 
-  if (isLoading || !user) {
-    return <div className="py-20 text-center text-sm text-stone-500 animate-pulse">Đang kiểm tra quyền...</div>;
-  }
-
   return (
     <div className="w-full space-y-6 pb-16">
       <Breadcrumbs

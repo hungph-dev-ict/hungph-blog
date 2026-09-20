@@ -21,7 +21,7 @@ export const AdminGuard: React.FC<AdminGuardProps> = ({
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push("/admin/login");
+      router.push("/");
     }
   }, [user, isLoading, router]);
 

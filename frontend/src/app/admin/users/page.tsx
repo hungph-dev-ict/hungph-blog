@@ -113,14 +113,6 @@ export default function AdminUsersPage() {
     }, `Đang xóa tài khoản "${targetUser.email}"...`);
   };
 
-  if (isLoading || !currentUser || !isAdmin) {
-    return (
-      <div className="py-20 text-center text-sm text-stone-500 animate-pulse">
-        Đang xác thực quyền Quản trị viên...
-      </div>
-    );
-  }
-
   const totalAdmins = users.filter((u) => u.role === "admin" || u.is_admin).length;
   const totalMembers = users.length - totalAdmins;
 
@@ -202,7 +194,7 @@ export default function AdminUsersPage() {
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
                 {users.map((u) => {
                   const isUserAdmin = u.role === "admin" || u.is_admin;
-                  const isCurrent = u.id === currentUser.id;
+                  const isCurrent = u.id === currentUser?.id;
 
                   return (
                     <tr key={u.id} className="hover:bg-stone-50/50 dark:hover:bg-stone-800/30 transition-colors">

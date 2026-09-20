@@ -69,6 +69,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.removeItem("hungph_blog_token");
     setToken(null);
     setUser(null);
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
+      window.location.href = "/";
+    }
   };
 
   return (

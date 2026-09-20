@@ -122,10 +122,6 @@ export default function AdminCategoriesPage() {
     }, "Đang xóa danh mục...");
   };
 
-  if (isLoading || !user) {
-    return <div className="py-20 text-center text-sm text-stone-500 animate-pulse">Đang kiểm tra quyền...</div>;
-  }
-
   return (
     <AdminGuard requireAdmin={true}>
       <div className="w-full space-y-6 pb-16">

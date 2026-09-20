@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import {
   Bell,
@@ -29,12 +29,18 @@ const NOTIF_ICONS: Record<string, string> = {
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, token, logout } = useAuth();
   const [isDark, setIsDark] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -283,7 +289,7 @@ export const Header: React.FC = () => {
               )}
 
               <button
-                onClick={logout}
+                onClick={handleLogout}
                 title="Đăng xuất"
                 className="p-1.5 sm:p-2 rounded-lg text-stone-400 hover:text-rose-600 transition-colors shrink-0"
               >

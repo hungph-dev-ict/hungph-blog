@@ -34,7 +34,17 @@ export default function HomePage() {
     targetSearch = searchQuery,
     overlayMessage?: string
   ) => {
-    const fetcher = async () => {
+    const msg =
+      overlayMessage ||
+      (targetSearch
+        ? "Đang tìm kiếm bài viết..."
+        : targetCategory
+        ? "Đang lọc bài viết..."
+        : targetPage > 1
+        ? `Đang tải trang ${targetPage}...`
+        : "Đang tải bài viết mới nhất...");
+
+    await withLoading(async () => {
       setLoading(true);
       try {
         const data = await fetchPosts({
@@ -55,13 +65,7 @@ export default function HomePage() {
       } finally {
         setLoading(false);
       }
-    };
-
-    if (overlayMessage) {
-      await withLoading(fetcher, overlayMessage);
-    } else {
-      await fetcher();
-    }
+    }, msg);
   };
 
   useEffect(() => {
@@ -74,7 +78,16 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    loadPosts(currentPage, selectedCategory, searchQuery);
+    loadPosts(
+      currentPage,
+      selectedCategory,
+      searchQuery,
+      selectedCategory
+        ? "Đang lọc bài viết..."
+        : currentPage > 1
+        ? `Đang tải trang ${currentPage}...`
+        : "Đang tải bài viết mới nhất..."
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, currentPage]);
 
@@ -82,12 +95,10 @@ export default function HomePage() {
     if (selectedCategory === catSlug) return;
     setSelectedCategory(catSlug);
     setCurrentPage(1);
-    loadPosts(1, catSlug, searchQuery, catSlug ? "Đang lọc bài viết..." : "Đang tải tất cả bài viết...");
   };
 
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage);
-    loadPosts(newPage, selectedCategory, searchQuery, `Đang tải trang ${newPage}...`);
     window.scrollTo({ top: 350, behavior: "smooth" });
   };
 
