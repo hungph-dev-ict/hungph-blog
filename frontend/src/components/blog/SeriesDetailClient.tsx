@@ -20,6 +20,8 @@ import {
   FilePlus,
   Loader2,
   Clock,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import {
   getCollaborators,
@@ -52,15 +54,31 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
     setSeries(initialSeries);
   }, [initialSeries]);
 
-  const [showCollabModal, setShowCollabModal] = useState(false);
-  const [showManageCollabModal, setShowManageCollabModal] = useState(false);
+  const hierarchyLevels: string[] = React.useMemo(() => {
+    try {
+      if (series.hierarchy_config) {
+        const parsed = JSON.parse(series.hierarchy_config);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return ["Chương"];
+  }, [series.hierarchy_config]);
+
+  const [activeTab, setActiveTab] = useState<"content" | "info">("content");
+  const [isEnrolled, setIsEnrolled] = useState(false);
+
+  // Collaborator state
+  const [isAlreadyCollaborator, setIsAlreadyCollaborator] = useState(false);
+  const [isPendingCollaborator, setIsPendingCollaborator] = useState(false);
   const [pendingCollabCount, setPendingCollabCount] = useState(0);
+  const [showManageCollabModal, setShowManageCollabModal] = useState(false);
+
+  // Request Collab modal state
+  const [showCollabModal, setShowCollabModal] = useState(false);
   const [collabMessage, setCollabMessage] = useState("");
   const [collabSubmitting, setCollabSubmitting] = useState(false);
   const [collabSuccess, setCollabSuccess] = useState(false);
   const [collabError, setCollabError] = useState("");
-  const [isAlreadyCollaborator, setIsAlreadyCollaborator] = useState(false);
-  const [isPendingCollaborator, setIsPendingCollaborator] = useState(false);
 
   const isAuthor = Boolean(user && series.author?.id && user.id === series.author.id);
   const isAdmin = Boolean(user && (user.is_admin || user.role === "admin"));
@@ -74,6 +92,8 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
   const [parentChapter, setParentChapter] = useState<Chapter | null>(null);
   const [chapterTitleInput, setChapterTitleInput] = useState("");
   const [chapterDescInput, setChapterDescInput] = useState("");
+  const [createChapterOrder, setCreateChapterOrder] = useState<number>(1);
+  const [createSiblingChapters, setCreateSiblingChapters] = useState<Chapter[]>([]);
   const [isCreatingChapter, setIsCreatingChapter] = useState(false);
   const [createChapterError, setCreateChapterError] = useState("");
 
@@ -81,6 +101,8 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
   const [editChapterTitle, setEditChapterTitle] = useState("");
   const [editChapterDesc, setEditChapterDesc] = useState("");
+  const [editChapterOrder, setEditChapterOrder] = useState<number>(1);
+  const [editSiblingChapters, setEditSiblingChapters] = useState<Chapter[]>([]);
   const [isUpdatingChapter, setIsUpdatingChapter] = useState(false);
   const [editChapterError, setEditChapterError] = useState("");
 
@@ -140,6 +162,14 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
     setChapterTitleInput("");
     setChapterDescInput("");
     setCreateChapterError("");
+
+    // Siblings in the same parent level
+    const siblings = (series.chapters || [])
+      .filter((c) => (parent ? c.parent_id === parent.id : (!c.parent_id || c.level === 1)))
+      .sort((a, b) => a.order - b.order);
+    setCreateSiblingChapters(siblings);
+    setCreateChapterOrder(siblings.length + 1);
+
     setShowCreateChapterModal(true);
   };
 
@@ -158,6 +188,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
             description: chapterDescInput.trim() || undefined,
             parent_id: parentChapter?.id || undefined,
             level: createChapterLevel,
+            order: createChapterOrder,
           },
           token
         );
@@ -177,6 +208,14 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
     setEditChapterTitle(ch.title);
     setEditChapterDesc(ch.description || "");
     setEditChapterError("");
+
+    // Siblings excluding this chapter
+    const siblings = (series.chapters || [])
+      .filter((c) => (ch.parent_id ? c.parent_id === ch.parent_id : (!c.parent_id || c.level === 1)) && c.id !== ch.id)
+      .sort((a, b) => a.order - b.order);
+    setEditSiblingChapters(siblings);
+    setEditChapterOrder(ch.order || 1);
+
     setShowEditChapterModal(true);
   };
 
@@ -193,6 +232,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
           {
             title: editChapterTitle.trim(),
             description: editChapterDesc.trim() || undefined,
+            order: editChapterOrder,
           },
           token
         );
@@ -736,6 +776,122 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                 />
               </div>
 
+              {/* Bộ chọn Vị trí & Thứ tự hiển thị */}
+              {(() => {
+                const createLvlName = hierarchyLevels[createChapterLevel - 1] || "mục";
+                const createPos = Math.max(0, Math.min(createChapterOrder - 1, createSiblingChapters.length));
+
+                return (
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800/40 border border-stone-200 dark:border-stone-700/60">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                        Vị trí đặt {createLvlName} {parentChapter ? `trong "${parentChapter.title}"` : "trong khóa học"}
+                      </label>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold">
+                        Vị trí số: {createChapterOrder}
+                      </span>
+                    </div>
+
+                    <select
+                      value={
+                        createPos === createSiblingChapters.length
+                          ? "end"
+                          : createPos === 0
+                          ? "start"
+                          : `before:${createPos}`
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "end") {
+                          setCreateChapterOrder(createSiblingChapters.length + 1);
+                        } else if (val === "start") {
+                          setCreateChapterOrder(1);
+                        } else if (val.startsWith("before:")) {
+                          const idx = parseInt(val.split(":")[1]);
+                          setCreateChapterOrder(idx + 1);
+                        } else if (val.startsWith("after:")) {
+                          const idx = parseInt(val.split(":")[1]);
+                          setCreateChapterOrder(idx + 2);
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-medium text-stone-900 dark:text-stone-100"
+                    >
+                      <option value="end">
+                        📌 Ở cuối cùng (Mặc định - Vị trí {createSiblingChapters.length + 1})
+                      </option>
+                      <option value="start">📌 Ở đầu tiên (Vị trí 1)</option>
+                      {createSiblingChapters.map((s, idx) => (
+                        <React.Fragment key={s.id}>
+                          <option value={`before:${idx}`}>
+                            ⬆️ Trước: &ldquo;{s.title.slice(0, 32)}{s.title.length > 32 ? "..." : ""}&rdquo; (Vị trí {idx + 1})
+                          </option>
+                          <option value={`after:${idx}`}>
+                            ⬇️ Sau: &ldquo;{s.title.slice(0, 32)}{s.title.length > 32 ? "..." : ""}&rdquo; (Vị trí {idx + 2})
+                          </option>
+                        </React.Fragment>
+                      ))}
+                    </select>
+
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between text-[10px] text-stone-500 font-medium uppercase tracking-wider">
+                        <span>Sơ đồ sắp xếp</span>
+                        <span>{createSiblingChapters.length + 1} {createLvlName}</span>
+                      </div>
+
+                      <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                        {createSiblingChapters.slice(0, createPos).map((item, idx) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-stone-100 dark:bg-stone-800/60 text-[11px] text-stone-600 dark:text-stone-400"
+                          >
+                            <span className="truncate max-w-[280px]">
+                              {idx + 1}. {item.title}
+                            </span>
+                          </div>
+                        ))}
+
+                        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-950/70 text-[11px] font-bold text-blue-700 dark:text-blue-300 shadow-sm">
+                          <span className="truncate max-w-[220px]">
+                            ★ {createPos + 1}. {chapterTitleInput.trim() || `[${createLvlName} mới này]`}
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              disabled={createPos === 0}
+                              onClick={() => setCreateChapterOrder(Math.max(1, createPos))}
+                              title="Đẩy lên trước một vị trí"
+                              className="p-1 rounded hover:bg-blue-200 dark:hover:bg-blue-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={createPos >= createSiblingChapters.length}
+                              onClick={() => setCreateChapterOrder(createPos + 2)}
+                              title="Đẩy xuống sau một vị trí"
+                              className="p-1 rounded hover:bg-blue-200 dark:hover:bg-blue-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {createSiblingChapters.slice(createPos).map((item, idx) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-stone-100 dark:bg-stone-800/60 text-[11px] text-stone-600 dark:text-stone-400"
+                          >
+                            <span className="truncate max-w-[280px]">
+                              {createPos + idx + 2}. {item.title}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
                   Mô tả ngắn (tùy chọn)
@@ -798,7 +954,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                     Chỉnh sửa mục
                   </h3>
                   <p className="text-xs text-stone-500">
-                    Cập nhật tên và mô tả mục
+                    Cập nhật tên, vị trí và mô tả mục
                   </p>
                 </div>
               </div>
@@ -832,6 +988,125 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                   className="w-full text-sm p-3 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
+              {/* Bộ chọn Vị trí thứ tự khi sửa */}
+              {(() => {
+                const editingCh = series.chapters?.find((c) => c.id === editingChapterId);
+                const editLvlName = editingCh ? hierarchyLevels[(editingCh.level || 1) - 1] || "mục" : "mục";
+                const editPos = Math.max(0, Math.min(editChapterOrder - 1, editSiblingChapters.length));
+
+                if (editSiblingChapters.length === 0) return null;
+
+                return (
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800/40 border border-stone-200 dark:border-stone-700/60">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                        Vị trí thứ tự của {editLvlName}
+                      </label>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-bold">
+                        Vị trí số: {editChapterOrder}
+                      </span>
+                    </div>
+
+                    <select
+                      value={
+                        editPos === editSiblingChapters.length
+                          ? "end"
+                          : editPos === 0
+                          ? "start"
+                          : `before:${editPos}`
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "end") {
+                          setEditChapterOrder(editSiblingChapters.length + 1);
+                        } else if (val === "start") {
+                          setEditChapterOrder(1);
+                        } else if (val.startsWith("before:")) {
+                          const idx = parseInt(val.split(":")[1]);
+                          setEditChapterOrder(idx + 1);
+                        } else if (val.startsWith("after:")) {
+                          const idx = parseInt(val.split(":")[1]);
+                          setEditChapterOrder(idx + 2);
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-medium text-stone-900 dark:text-stone-100"
+                    >
+                      <option value="end">
+                        📌 Ở cuối cùng (Vị trí {editSiblingChapters.length + 1})
+                      </option>
+                      <option value="start">📌 Ở đầu tiên (Vị trí 1)</option>
+                      {editSiblingChapters.map((s, idx) => (
+                        <React.Fragment key={s.id}>
+                          <option value={`before:${idx}`}>
+                            ⬆️ Trước: &ldquo;{s.title.slice(0, 32)}{s.title.length > 32 ? "..." : ""}&rdquo; (Vị trí {idx + 1})
+                          </option>
+                          <option value={`after:${idx}`}>
+                            ⬇️ Sau: &ldquo;{s.title.slice(0, 32)}{s.title.length > 32 ? "..." : ""}&rdquo; (Vị trí {idx + 2})
+                          </option>
+                        </React.Fragment>
+                      ))}
+                    </select>
+
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between text-[10px] text-stone-500 font-medium uppercase tracking-wider">
+                        <span>Sơ đồ sắp xếp</span>
+                        <span>{editSiblingChapters.length + 1} {editLvlName}</span>
+                      </div>
+
+                      <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                        {editSiblingChapters.slice(0, editPos).map((item, idx) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-stone-100 dark:bg-stone-800/60 text-[11px] text-stone-600 dark:text-stone-400"
+                          >
+                            <span className="truncate max-w-[280px]">
+                              {idx + 1}. {item.title}
+                            </span>
+                          </div>
+                        ))}
+
+                        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/70 text-[11px] font-bold text-amber-800 dark:text-amber-200 shadow-sm">
+                          <span className="truncate max-w-[220px]">
+                            ★ {editPos + 1}. {editChapterTitle.trim() || "[Mục này]"}
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              disabled={editPos === 0}
+                              onClick={() => setEditChapterOrder(Math.max(1, editPos))}
+                              title="Đẩy lên trước một vị trí"
+                              className="p-1 rounded hover:bg-amber-200 dark:hover:bg-amber-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={editPos >= editSiblingChapters.length}
+                              onClick={() => setEditChapterOrder(editPos + 2)}
+                              title="Đẩy xuống sau một vị trí"
+                              className="p-1 rounded hover:bg-amber-200 dark:hover:bg-amber-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {editSiblingChapters.slice(editPos).map((item, idx) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-stone-100 dark:bg-stone-800/60 text-[11px] text-stone-600 dark:text-stone-400"
+                          >
+                            <span className="truncate max-w-[280px]">
+                              {editPos + idx + 2}. {item.title}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from slugify import slugify
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -529,6 +529,18 @@ async def create_post(
     if not category_id and post_in.series_id:
         s_cat_stmt = select(Series.category_id).where(Series.id == post_in.series_id)
         category_id = (await db.execute(s_cat_stmt)).scalar_one_or_none()
+
+    post_order = post_in.order_in_chapter or 1
+    if post_in.chapter_id:
+        shift_post_stmt = (
+            update(Post)
+            .where(
+                Post.chapter_id == post_in.chapter_id,
+                Post.order_in_chapter >= post_order
+            )
+            .values(order_in_chapter=Post.order_in_chapter + 1)
+        )
+        await db.execute(shift_post_stmt)
 
     new_post = Post(
         title=post_in.title.strip(),
@@ -1187,10 +1199,33 @@ async def add_chapter_to_series(
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # Xác định thứ tự hiển thị (order) và dịch chuyển các mục phía sau nếu chèn vào giữa/đầu
+    p_filter = (Chapter.parent_id == parent_id) if parent_id else Chapter.parent_id.is_(None)
+    max_order_stmt = select(func.max(Chapter.order)).where(
+        Chapter.series_id == series_id,
+        p_filter
+    )
+    max_res = (await db.execute(max_order_stmt)).scalar() or 0
+
+    if chapter_in.order is None or chapter_in.order > max_res:
+        computed_order = max_res + 1
+    else:
+        computed_order = max(1, chapter_in.order)
+        shift_stmt = (
+            update(Chapter)
+            .where(
+                Chapter.series_id == series_id,
+                p_filter,
+                Chapter.order >= computed_order
+            )
+            .values(order=Chapter.order + 1)
+        )
+        await db.execute(shift_stmt)
+
     ch = Chapter(
         series_id=series_id,
         title=chapter_in.title.strip(),
-        order=chapter_in.order,
+        order=computed_order,
         description=chapter_in.description,
         parent_id=parent_id,
         level=computed_level
@@ -1218,8 +1253,23 @@ async def update_chapter(
 
     if ch_in.title:
         ch.title = ch_in.title.strip()
-    if ch_in.order is not None:
-        ch.order = ch_in.order
+    if ch_in.order is not None and ch_in.order != ch.order:
+        old_order = ch.order
+        new_order = max(1, ch_in.order)
+        p_filter = (Chapter.parent_id == ch.parent_id) if ch.parent_id else Chapter.parent_id.is_(None)
+        if new_order < old_order:
+            await db.execute(
+                update(Chapter)
+                .where(Chapter.series_id == ch.series_id, p_filter, Chapter.order >= new_order, Chapter.order < old_order)
+                .values(order=Chapter.order + 1)
+            )
+        elif new_order > old_order:
+            await db.execute(
+                update(Chapter)
+                .where(Chapter.series_id == ch.series_id, p_filter, Chapter.order > old_order, Chapter.order <= new_order)
+                .values(order=Chapter.order - 1)
+            )
+        ch.order = new_order
     if ch_in.description is not None:
         ch.description = ch_in.description
     if ch_in.parent_id is not None:
@@ -1246,7 +1296,16 @@ async def delete_chapter(
 
     await check_series_edit_permission(db, ch.series_id, current_user)
 
+    old_order = ch.order
+    series_id = ch.series_id
+    p_filter = (Chapter.parent_id == ch.parent_id) if ch.parent_id else Chapter.parent_id.is_(None)
+
     await db.delete(ch)
+    await db.execute(
+        update(Chapter)
+        .where(Chapter.series_id == series_id, p_filter, Chapter.order > old_order)
+        .values(order=Chapter.order - 1)
+    )
     await db.commit()
     return None
 

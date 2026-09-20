@@ -102,6 +102,8 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   const [addingLevelIdx, setAddingLevelIdx] = useState<number | null>(null);
   const [newChapterTitle, setNewChapterTitle] = useState("");
   const [newChapterDesc, setNewChapterDesc] = useState("");
+  const [newChapterOrder, setNewChapterOrder] = useState<number>(1);
+  const [modalSiblingChapters, setModalSiblingChapters] = useState<Chapter[]>([]);
   const [isAddingChapter, setIsAddingChapter] = useState(false);
   const [addChapterError, setAddChapterError] = useState("");
 
@@ -329,6 +331,14 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     setNewChapterTitle("");
     setNewChapterDesc("");
     setAddChapterError("");
+
+    const parentId = levelIdx === 0 ? undefined : selectedLevelIds[levelIdx - 1];
+    const siblings = chapterList
+      .filter((c) => (levelIdx === 0 ? (!c.parent_id || c.level === 1) : c.parent_id === parentId))
+      .sort((a, b) => a.order - b.order);
+    setModalSiblingChapters(siblings);
+    setNewChapterOrder(siblings.length + 1);
+
     setShowAddChapterModal(true);
   };
 
@@ -348,11 +358,6 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     setAddChapterError("");
 
     try {
-      const existingInSameParent = chapterList.filter((c) =>
-        lvlIdx === 0 ? !c.parent_id || c.level === 1 : c.parent_id === parentId
-      );
-      const nextOrder = existingInSameParent.length + 1;
-
       const created = await addChapter(
         seriesId,
         {
@@ -360,7 +365,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
           description: newChapterDesc.trim() || undefined,
           parent_id: parentId,
           level: computedLevel,
-          order: nextOrder,
+          order: newChapterOrder,
         },
         token
       );
@@ -1174,6 +1179,125 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
                   className="w-full text-xs px-3 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/80 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
+              {/* Thứ tự & Vị trí hiển thị */}
+              {(() => {
+                const currentLvlName = hierarchyLevels[addingLevelIdx] || "mục";
+                const parentName = addingLevelIdx > 0
+                  ? chapterList.find((c) => c.id === selectedLevelIds[addingLevelIdx - 1])?.title
+                  : null;
+                const pos = Math.max(0, Math.min(newChapterOrder - 1, modalSiblingChapters.length));
+
+                return (
+                  <div className="space-y-2 p-3 rounded-xl bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700/60">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                        Vị trí đặt {currentLvlName} {parentName ? `trong "${parentName}"` : "trong khóa học"}
+                      </label>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold">
+                        Vị trí số: {newChapterOrder}
+                      </span>
+                    </div>
+
+                    <select
+                      value={
+                        pos === modalSiblingChapters.length
+                          ? "end"
+                          : pos === 0
+                          ? "start"
+                          : `before:${pos}`
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "end") {
+                          setNewChapterOrder(modalSiblingChapters.length + 1);
+                        } else if (val === "start") {
+                          setNewChapterOrder(1);
+                        } else if (val.startsWith("before:")) {
+                          const idx = parseInt(val.split(":")[1]);
+                          setNewChapterOrder(idx + 1);
+                        } else if (val.startsWith("after:")) {
+                          const idx = parseInt(val.split(":")[1]);
+                          setNewChapterOrder(idx + 2);
+                        }
+                      }}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-medium text-stone-900 dark:text-stone-100"
+                    >
+                      <option value="end">
+                        📌 Ở cuối cùng (Mặc định - Vị trí {modalSiblingChapters.length + 1})
+                      </option>
+                      <option value="start">📌 Ở đầu tiên (Vị trí 1)</option>
+                      {modalSiblingChapters.map((s, idx) => (
+                        <React.Fragment key={s.id}>
+                          <option value={`before:${idx}`}>
+                            ⬆️ Trước: &ldquo;{s.title.slice(0, 30)}{s.title.length > 30 ? "..." : ""}&rdquo; (Vị trí {idx + 1})
+                          </option>
+                          <option value={`after:${idx}`}>
+                            ⬇️ Sau: &ldquo;{s.title.slice(0, 30)}{s.title.length > 30 ? "..." : ""}&rdquo; (Vị trí {idx + 2})
+                          </option>
+                        </React.Fragment>
+                      ))}
+                    </select>
+
+                    <div className="space-y-1 pt-1">
+                      <div className="flex items-center justify-between text-[10px] text-stone-500 font-medium uppercase tracking-wider">
+                        <span>Sơ đồ sắp xếp</span>
+                        <span>{modalSiblingChapters.length + 1} {currentLvlName}</span>
+                      </div>
+
+                      <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                        {modalSiblingChapters.slice(0, pos).map((item, idx) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between px-2 py-1 rounded bg-stone-100 dark:bg-stone-800/60 text-[11px] text-stone-600 dark:text-stone-400"
+                          >
+                            <span className="truncate max-w-[240px]">
+                              {idx + 1}. {item.title}
+                            </span>
+                          </div>
+                        ))}
+
+                        <div className="flex items-center justify-between px-2 py-1 rounded border border-blue-500 bg-blue-50 dark:bg-blue-950/70 text-[11px] font-bold text-blue-700 dark:text-blue-300">
+                          <span className="truncate max-w-[190px]">
+                            ★ {pos + 1}. {newChapterTitle.trim() || `[${currentLvlName} mới này]`}
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              disabled={pos === 0}
+                              onClick={() => setNewChapterOrder(Math.max(1, pos))}
+                              title="Đẩy lên trước một vị trí"
+                              className="p-0.5 rounded hover:bg-blue-200 dark:hover:bg-blue-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pos >= modalSiblingChapters.length}
+                              onClick={() => setNewChapterOrder(pos + 2)}
+                              title="Đẩy xuống sau một vị trí"
+                              className="p-0.5 rounded hover:bg-blue-200 dark:hover:bg-blue-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {modalSiblingChapters.slice(pos).map((item, idx) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between px-2 py-1 rounded bg-stone-100 dark:bg-stone-800/60 text-[11px] text-stone-600 dark:text-stone-400"
+                          >
+                            <span className="truncate max-w-[240px]">
+                              {pos + idx + 2}. {item.title}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">

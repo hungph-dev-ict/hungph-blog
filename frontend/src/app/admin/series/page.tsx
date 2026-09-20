@@ -355,7 +355,10 @@ function AdminSeriesContent() {
     if (!newChapterTitle.trim() || !token) return;
     await withLoading(async () => {
       try {
-        const order = (selectedDetail?.chapters?.length || 0) + 1;
+        const siblings = (selectedDetail?.chapters || []).filter((c) =>
+          newChapterParentId ? c.parent_id === newChapterParentId : (!c.parent_id || c.level === 1)
+        );
+        const order = siblings.length + 1;
         let level = 1;
         if (newChapterParentId) {
           const parentCh = selectedDetail?.chapters?.find((c) => c.id === newChapterParentId);
