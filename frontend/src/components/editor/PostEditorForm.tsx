@@ -97,7 +97,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   // Check auth
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push("/admin/login");
+      router.push("/login?redirect=/editor/new");
     }
   }, [user, isLoading, router]);
 
@@ -182,8 +182,10 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
           router.push(`/admin/series?slug=${qSlug}`);
         } else if (isAdmin && qSeries) {
           router.push(`/admin/series?id=${qSeries}`);
-        } else {
+        } else if (isAdmin) {
           router.push("/admin/posts");
+        } else {
+          router.push("/posts/manage");
         }
       })
       .finally(() => setPageLoading(false));
@@ -223,7 +225,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         : "/admin/posts")
     : (targetSeriesSlug
         ? `/series/${targetSeriesSlug}`
-        : "/admin/posts");
+        : "/posts/manage");
 
   const backTitle = targetSeriesTitle
     ? (isAdmin ? `Quay lại quản lý khóa học "${targetSeriesTitle}"` : `Xem khóa học "${targetSeriesTitle}"`)
@@ -313,7 +315,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     }
     if (!token) {
       alert("Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.");
-      router.push("/admin/login");
+      router.push("/login");
       return;
     }
 
@@ -372,7 +374,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
           if (seriesId) queryParams.set("series_id", seriesId);
           if (targetSeriesSlug) queryParams.set("series_slug", targetSeriesSlug);
           const qs = queryParams.toString() ? `?${queryParams.toString()}` : "";
-          router.push(`/admin/editor/${savedPost.id}${qs}`);
+          router.push(`/editor/${savedPost.id}${qs}`);
         }
       } catch (err: any) {
         alert(`Lỗi khi lưu bài viết: ${err.message}`);
@@ -404,7 +406,12 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     <div className="w-full space-y-4 pb-20">
       <Breadcrumbs
         items={[
-          { label: isAdmin ? "Quản trị" : "Tài khoản", href: "/admin/posts" },
+          ...(isAdmin
+            ? [{ label: "Quản trị", href: "/admin/posts" }]
+            : [
+                { label: "Trang chủ", href: "/" },
+                { label: "Bài viết của tôi", href: "/posts/manage" },
+              ]),
           ...(isCoursePost
             ? [
                 {
@@ -413,7 +420,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
                 },
               ]
             : []),
-          { label: postId ? "Chỉnh sửa bài viết" : "Tạo bài viết mới" },
+          { label: postId ? "Chỉnh sửa bài viết" : "Viết bài mới" },
         ]}
       />
 

@@ -1,12 +1,24 @@
 "use client";
 
-import React, { Suspense } from "react";
-import { PostEditorForm } from "@/components/editor/PostEditorForm";
+import { useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-export default function NewPostPage() {
+function RedirectHandler() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const qs = searchParams?.toString() ? `?${searchParams.toString()}` : "";
+    router.replace(`/editor/new${qs}`);
+  }, [router, searchParams]);
+
+  return null;
+}
+
+export default function AdminEditorNewRedirect() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-xs text-stone-400">Đang khởi tạo trình soạn thảo...</div>}>
-      <PostEditorForm />
+    <Suspense fallback={null}>
+      <RedirectHandler />
     </Suspense>
   );
 }

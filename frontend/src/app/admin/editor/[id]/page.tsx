@@ -1,16 +1,28 @@
 "use client";
 
-import React, { Suspense } from "react";
-import { useParams } from "next/navigation";
-import { PostEditorForm } from "@/components/editor/PostEditorForm";
+import { useEffect, Suspense } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
-export default function EditPostPage() {
+function RedirectHandler() {
   const params = useParams();
-  const id = params?.id as string;
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
+  useEffect(() => {
+    const id = params?.id;
+    if (id) {
+      const qs = searchParams?.toString() ? `?${searchParams.toString()}` : "";
+      router.replace(`/editor/${id}${qs}`);
+    }
+  }, [params, router, searchParams]);
+
+  return null;
+}
+
+export default function AdminEditorIdRedirect() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-xs text-stone-400">Đang khởi tạo trình soạn thảo...</div>}>
-      <PostEditorForm postId={id} />
+    <Suspense fallback={null}>
+      <RedirectHandler />
     </Suspense>
   );
 }

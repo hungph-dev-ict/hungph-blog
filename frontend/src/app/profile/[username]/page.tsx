@@ -145,14 +145,14 @@ export default function ProfilePage() {
               {isOwnProfile ? (
                 <div className="flex items-center gap-2">
                   <Link
-                    href="/admin/posts"
+                    href={user?.role === "admin" || user?.is_admin ? "/admin/posts" : "/posts/manage"}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-semibold transition-colors shadow-xs"
                   >
                     <FileText className="w-3.5 h-3.5" />
                     <span>Bài viết của tôi</span>
                   </Link>
                   <Link
-                    href="/admin/editor/new"
+                    href="/editor/new"
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-all shadow-sm shadow-blue-500/25"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -183,7 +183,7 @@ export default function ProfilePage() {
                 </button>
               ) : (
                 <Link
-                  href="/admin/login"
+                  href="/login"
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-xs font-semibold text-stone-600 dark:text-stone-300 transition-colors"
                 >
                   <span>Đăng nhập để theo dõi</span>
@@ -241,7 +241,7 @@ export default function ProfilePage() {
           </h2>
           {isOwnProfile && (
             <Link
-              href="/admin/editor/new"
+              href="/editor/new"
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -266,7 +266,7 @@ export default function ProfilePage() {
             {isOwnProfile && (
               <div className="pt-2">
                 <Link
-                  href="/admin/editor/new"
+                  href="/editor/new"
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all"
                 >
                   <Plus className="w-3.5 h-3.5" />

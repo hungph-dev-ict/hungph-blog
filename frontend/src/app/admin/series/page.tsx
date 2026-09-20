@@ -144,7 +144,7 @@ function AdminSeriesContent() {
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push("/admin/login");
+      router.push("/login");
     }
   }, [user, isLoading, router]);
 
@@ -1219,7 +1219,7 @@ function AdminSeriesContent() {
 
                                     {isLeaf && (
                                       <Link
-                                        href={`/admin/editor/new?series_id=${selectedDetail.id}&series_slug=${selectedDetail.slug}&chapter_id=${ch.id}`}
+                                        href={`/editor/new?series_id=${selectedDetail.id}&series_slug=${selectedDetail.slug}&chapter_id=${ch.id}`}
                                         className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
                                       >
                                         <Plus className="w-3 h-3" /> Viết bài vào {lvlName}
@@ -1261,7 +1261,7 @@ function AdminSeriesContent() {
                                       </span>
                                       <div className="flex items-center gap-2 text-[11px]">
                                         <Link
-                                          href={`/admin/editor/${lesson.id}?series_id=${selectedDetail.id}&series_slug=${selectedDetail.slug}`}
+                                          href={`/editor/${lesson.id}?series_id=${selectedDetail.id}&series_slug=${selectedDetail.slug}`}
                                           className="text-stone-400 hover:text-blue-600"
                                         >
                                           Sửa

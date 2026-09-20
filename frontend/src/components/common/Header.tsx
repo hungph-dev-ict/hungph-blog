@@ -259,7 +259,7 @@ export const Header: React.FC = () => {
           {user ? (
             <div className="flex items-center gap-1 sm:gap-2">
               <Link
-                href="/admin/editor/new"
+                href="/editor/new"
                 className="hidden md:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm shadow-blue-500/20"
               >
                 <PenTool className="w-3.5 h-3.5" />
@@ -294,21 +294,39 @@ export const Header: React.FC = () => {
                 )}
               </Link>
 
-              {/* Nút Quản lý: Khi đang ở bất kỳ trang admin nào (/admin/*) thì hiển thị màu tím và disable theo phương châm UI thống nhất */}
-              {pathname.startsWith("/admin") ? (
-                <span
-                  aria-current="page"
-                  className="inline-flex items-center text-xs font-bold px-2.5 py-1.5 rounded-xl border border-purple-300 dark:border-purple-800 bg-purple-100/90 dark:bg-purple-950/70 text-purple-800 dark:text-purple-200 shadow-xs cursor-default pointer-events-none select-none shrink-0"
-                >
-                  Quản lý
-                </span>
+              {/* Nút Quản lý (Admin) hoặc Bài viết (Member) với phương châm UI đang chọn thì disable */}
+              {isAdmin ? (
+                pathname.startsWith("/admin") ? (
+                  <span
+                    aria-current="page"
+                    className="inline-flex items-center text-xs font-bold px-2.5 py-1.5 rounded-xl border border-purple-300 dark:border-purple-800 bg-purple-100/90 dark:bg-purple-950/70 text-purple-800 dark:text-purple-200 shadow-xs cursor-default pointer-events-none select-none shrink-0"
+                  >
+                    Quản lý
+                  </span>
+                ) : (
+                  <Link
+                    href="/admin/posts"
+                    className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shrink-0"
+                  >
+                    Quản lý
+                  </Link>
+                )
               ) : (
-                <Link
-                  href="/admin/posts"
-                  className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shrink-0"
-                >
-                  {isAdmin ? "Quản lý" : "Bài viết"}
-                </Link>
+                pathname === "/posts/manage" ? (
+                  <span
+                    aria-current="page"
+                    className="inline-flex items-center text-xs font-bold px-2.5 py-1.5 rounded-xl border border-blue-300 dark:border-blue-800 bg-blue-100/90 dark:bg-blue-950/70 text-blue-800 dark:text-blue-200 shadow-xs cursor-default pointer-events-none select-none shrink-0"
+                  >
+                    Bài viết
+                  </span>
+                ) : (
+                  <Link
+                    href="/posts/manage"
+                    className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shrink-0"
+                  >
+                    Bài viết
+                  </Link>
+                )
               )}
 
               <button
@@ -320,7 +338,14 @@ export const Header: React.FC = () => {
               </button>
             </div>
           ) : (
-            <GoogleLoginButton buttonText="Đăng nhập" />
+            <div className="flex items-center gap-2">
+              <Link
+                href="/login"
+                className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-900 dark:text-white transition-all shadow-xs"
+              >
+                Đăng nhập
+              </Link>
+            </div>
           )}
         </div>
       </div>

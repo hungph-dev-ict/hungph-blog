@@ -14,7 +14,6 @@ import {
   FileText,
   AlertCircle,
   Search,
-  Filter,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -22,18 +21,19 @@ import {
   ChevronRight,
   Loader2,
   X,
-  RefreshCw,
+  PenTool,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { fetchPosts, deletePost, updatePost, fetchCategories } from "@/lib/api";
 import { Category, PostListItem } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
-import { AdminNav } from "@/components/admin/AdminNav";
-import { AdminGuard } from "@/components/admin/AdminGuard";
 import { useLoading } from "@/lib/loading-context";
 import { Pagination } from "@/components/common/Pagination";
 
-export default function AdminPostsPage() {
+type SortColumn = "title" | "status" | "category" | "views" | "date";
+type SortDirection = "asc" | "desc";
+
+export default function MemberPostsManagePage() {
   const router = useRouter();
   const { user, token, isLoading } = useAuth();
   const { withLoading } = useLoading();
@@ -45,19 +45,8 @@ export default function AdminPostsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "published" | "draft">("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
-  type SortColumn = "title" | "author" | "status" | "category" | "views" | "date";
-  type SortDirection = "asc" | "desc";
   const [sortColumn, setSortColumn] = useState<SortColumn>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortColumn(column);
-      setSortDirection(column === "date" || column === "views" ? "desc" : "asc");
-    }
-  };
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -65,12 +54,17 @@ export default function AdminPostsPage() {
 
   // Concurrent action blocking states
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-
-  const isAdmin = user?.role === "admin" || user?.is_admin;
   const isProcessing = Boolean(actionLoadingId);
 
-  const loadAllPosts = async () => {
-    if (!token) return;
+  // Auth check
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/login?redirect=/posts/manage");
+    }
+  }, [user, isLoading, router]);
+
+  const loadMyPosts = async () => {
+    if (!token || !user) return;
     setLoading(true);
     try {
       const [postsData, catsData] = await Promise.all([
@@ -78,7 +72,7 @@ export default function AdminPostsPage() {
           {
             limit: 100,
             include_drafts: true,
-            author_id: isAdmin ? undefined : user?.id,
+            author_id: user.id,
           },
           token
         ),
@@ -87,7 +81,7 @@ export default function AdminPostsPage() {
       setPosts(postsData.items);
       setCategories(catsData);
     } catch (err) {
-      console.error("Lỗi khi tải bài viết:", err);
+      console.error("Lỗi khi tải bài viết cá nhân:", err);
     } finally {
       setLoading(false);
     }
@@ -95,9 +89,9 @@ export default function AdminPostsPage() {
 
   useEffect(() => {
     if (token && user) {
-      loadAllPosts();
+      loadMyPosts();
     }
-  }, [token, user?.id, isAdmin]);
+  }, [token, user?.id]);
 
   // Handle Delete Post
   const handleDelete = async (id: string, title: string) => {
@@ -132,7 +126,7 @@ export default function AdminPostsPage() {
           post.id,
           {
             title: post.title,
-            content_html: "", // Keep unchanged on backend if empty/optional
+            content_html: "",
             is_published: targetStatus,
           },
           token
@@ -148,9 +142,19 @@ export default function AdminPostsPage() {
     }, targetStatus ? "Đang xuất bản bài viết..." : "Đang chuyển bài viết về bản nháp...");
   };
 
+  // Sort handler
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(column);
+      setSortDirection(column === "date" || column === "views" ? "desc" : "asc");
+    }
+  };
+
   // Filter & Sort computation
   const filteredPosts = useMemo(() => {
-    let result = isAdmin ? posts : posts.filter((p) => p.author?.id === user?.id);
+    let result = posts.filter((p) => p.author?.id === user?.id || !p.author);
 
     // Filter by search query
     if (searchQuery.trim()) {
@@ -159,8 +163,6 @@ export default function AdminPostsPage() {
         (p) =>
           p.title.toLowerCase().includes(q) ||
           p.slug.toLowerCase().includes(q) ||
-          (p.author?.full_name && p.author.full_name.toLowerCase().includes(q)) ||
-          (p.author?.username && p.author.username.toLowerCase().includes(q)) ||
           (p.category?.name && p.category.name.toLowerCase().includes(q))
       );
     }
@@ -184,12 +186,6 @@ export default function AdminPostsPage() {
         case "title":
           comparison = a.title.localeCompare(b.title, "vi");
           break;
-        case "author": {
-          const authorA = a.author?.full_name || a.author?.username || "";
-          const authorB = b.author?.full_name || b.author?.username || "";
-          comparison = authorA.localeCompare(authorB, "vi");
-          break;
-        }
         case "status": {
           const statusA = a.is_published ? 1 : 0;
           const statusB = b.is_published ? 1 : 0;
@@ -219,7 +215,7 @@ export default function AdminPostsPage() {
       }
       return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [posts, isAdmin, user, searchQuery, selectedStatus, selectedCategory, sortColumn, sortDirection]);
+  }, [posts, user?.id, searchQuery, selectedStatus, selectedCategory, sortColumn, sortDirection]);
 
   // Reset page when filters or sorting change
   useEffect(() => {
@@ -290,54 +286,47 @@ export default function AdminPostsPage() {
     );
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3 text-stone-400 py-20">
+        <Loader2 className="w-7 h-7 animate-spin text-blue-600" />
+        <span className="text-xs font-medium">Đang tải danh sách bài viết...</span>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
   return (
-    <AdminGuard requireAdmin={true}>
-      <div className="w-full space-y-6 pb-16">
-        <Breadcrumbs
-          items={[
-            { label: "Quản trị", href: "/admin/posts" },
-            { label: "Quản lý bài viết" },
-          ]}
-        />
+    <div className="w-full space-y-6 pb-16">
+      {/* Breadcrumbs - Strictly no 'Quản trị' for member */}
+      <Breadcrumbs
+        items={[
+          { label: "Trang chủ", href: "/" },
+          { label: "Bài viết của tôi" },
+        ]}
+      />
 
-        {/* Top Bar Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-6">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white">
-                {isAdmin ? "Quản Lý Bài Viết" : "Bài Viết Của Tôi"}
-              </h1>
-              <span
-                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                  isAdmin
-                    ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
-                    : "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-                }`}
-              >
-                {isAdmin ? "Admin" : "Thành viên"}
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-stone-500 mt-1">
-              Xin chào <span className="font-semibold text-blue-600">{user?.full_name || user?.username}</span>! {isAdmin ? "Toàn bộ hệ thống hiện có " : "Bạn đang có "}<span className="font-bold text-stone-900 dark:text-white">{posts.length}</span> bài viết.
-            </p>
-          </div>
+      {/* Header & New Post Action Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-5">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-white">
+            Bài Viết Của Tôi
+          </h1>
+          <p className="text-xs text-stone-500">
+            Quản lý, chỉnh sửa và theo dõi trạng thái các bài viết do bạn biên soạn.
+          </p>
+        </div>
 
-        {/* Unified Admin Nav Tab Bar with Highlight and Disable on Active Tab */}
-        <AdminNav
-          currentTab="posts"
-          disabled={isProcessing}
-          actionButton={
-            <Link
-              href="/editor/new"
-              className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all ${
-                isProcessing ? "pointer-events-none opacity-50" : ""
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              <span>Viết bài mới</span>
-            </Link>
-          }
-        />
+        <Link
+          href="/editor/new"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Viết bài mới</span>
+        </Link>
       </div>
 
       {/* Search & Filter Controls Bar */}
@@ -351,7 +340,7 @@ export default function AdminPostsPage() {
               disabled={isProcessing}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm kiếm theo tiêu đề, tác giả, danh mục..."
+              placeholder="Tìm kiếm theo tiêu đề, danh mục..."
               className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
             />
             {searchQuery && (
@@ -438,11 +427,11 @@ export default function AdminPostsPage() {
         <div className="text-center py-16 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3">
           <FileText className="w-10 h-10 text-stone-400 mx-auto" />
           <h3 className="font-semibold text-stone-800 dark:text-stone-200">
-            {posts.length === 0 ? "Chưa có bài viết nào" : "Không tìm thấy bài viết nào phù hợp"}
+            {posts.length === 0 ? "Bạn chưa có bài viết nào" : "Không tìm thấy bài viết nào phù hợp"}
           </h3>
           <p className="text-sm text-stone-500">
             {posts.length === 0
-              ? "Hãy bắt đầu viết bài đầu tiên của bạn!"
+              ? "Hãy bắt đầu chia sẻ kiến thức và viết bài đầu tiên của bạn!"
               : "Thử thay đổi từ khóa tìm kiếm hoặc làm mới bộ lọc."}
           </p>
           {posts.length === 0 ? (
@@ -474,7 +463,6 @@ export default function AdminPostsPage() {
               <thead className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 text-stone-500 text-xs font-semibold uppercase">
                 <tr>
                   {renderSortHeader("title", "Tiêu đề bài viết")}
-                  {isAdmin && renderSortHeader("author", "Tác giả")}
                   {renderSortHeader("status", "Trạng thái")}
                   {renderSortHeader("category", "Danh mục")}
                   {renderSortHeader("views", "Lượt xem")}
@@ -486,7 +474,6 @@ export default function AdminPostsPage() {
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800/60">
                 {paginatedPosts.map((post) => {
-                  const canManage = isAdmin || (!!user?.id && post.author?.id === user.id);
                   const isItemLoading = actionLoadingId === post.id;
 
                   return (
@@ -498,91 +485,97 @@ export default function AdminPostsPage() {
                         <span title={post.title}>{post.title}</span>
                       </td>
 
-                      {isAdmin && (
-                        <td className="py-4 px-4 text-xs text-stone-500 whitespace-nowrap">
-                          {post.author?.full_name || post.author?.username || "Admin"}
-                        </td>
-                      )}
-
                       <td className="py-4 px-4 whitespace-nowrap">
                         <button
-                          type="button"
-                          disabled={isProcessing || !canManage}
+                          disabled={isProcessing}
                           onClick={() => handleTogglePublish(post)}
-                          title={canManage ? "Bấm để đổi trạng thái" : undefined}
-                          className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full transition-all ${
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
                             post.is_published
-                              ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 hover:bg-emerald-100"
-                              : "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60 hover:bg-amber-100"
-                          } ${isProcessing ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100"
+                              : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-100"
+                          } ${isItemLoading ? "opacity-50 pointer-events-none" : ""}`}
+                          title={`Nhấn để ${post.is_published ? "chuyển về nháp" : "xuất bản"}`}
                         >
-                          {isItemLoading ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
-                          ) : post.is_published ? (
-                            <CheckCircle className="w-3 h-3" />
+                          {post.is_published ? (
+                            <>
+                              <CheckCircle className="w-3 h-3 text-emerald-600" />
+                              <span>Đã xuất bản</span>
+                            </>
                           ) : (
-                            <AlertCircle className="w-3 h-3" />
+                            <>
+                              <AlertCircle className="w-3 h-3 text-amber-600" />
+                              <span>Bản nháp</span>
+                            </>
                           )}
-                          <span>{post.is_published ? "Đã xuất bản" : "Bản nháp"}</span>
                         </button>
                       </td>
 
-                      <td className="py-4 px-4 text-xs text-stone-500 whitespace-nowrap">
-                        {post.category?.name || "—"}
+                      <td className="py-4 px-4 whitespace-nowrap">
+                        {post.category ? (
+                          <span className="text-xs px-2.5 py-1 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-medium">
+                            {post.category.name}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-stone-400 italic">Chưa phân loại</span>
+                        )}
                       </td>
 
-                      <td className="py-4 px-4 text-xs text-stone-500 whitespace-nowrap">
-                        <span className="flex items-center gap-1">
+                      <td className="py-4 px-4 text-stone-600 dark:text-stone-400 text-xs whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 font-mono">
                           <Eye className="w-3.5 h-3.5 text-stone-400" />
-                          {post.views_count}
-                        </span>
+                          <span>{post.views_count || 0}</span>
+                        </div>
                       </td>
 
-                      <td className="py-4 px-4 text-xs text-stone-400 whitespace-nowrap">
-                        {post.published_at
-                          ? new Date(post.published_at).toLocaleDateString("vi-VN")
-                          : "—"}
+                      <td className="py-4 px-4 text-stone-500 text-xs whitespace-nowrap font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-stone-400" />
+                          <span>
+                            {new Date(post.published_at || post.created_at).toLocaleDateString("vi-VN")}
+                          </span>
+                        </div>
                       </td>
 
                       <td className="py-4 px-4 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Sửa bài viết */}
+                          <Link
+                            href={`/editor/${post.id}`}
+                            className={`p-2 rounded-lg text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
+                              isProcessing ? "pointer-events-none opacity-50" : ""
+                            }`}
+                            title="Chỉnh sửa bài viết"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Link>
+
+                          {/* Xem bài viết công khai */}
                           {post.is_published && (
                             <Link
                               href={`/posts/${post.slug}`}
                               target="_blank"
-                              className={`p-1.5 rounded-lg text-stone-400 hover:text-blue-600 transition-colors ${
-                                isProcessing ? "pointer-events-none opacity-40" : ""
+                              className={`p-2 rounded-lg text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
+                                isProcessing ? "pointer-events-none opacity-50" : ""
                               }`}
-                              title="Xem bài viết"
+                              title="Xem bài viết công khai"
                             >
                               <ExternalLink className="w-4 h-4" />
                             </Link>
                           )}
-                          {canManage && (
-                            <>
-                              <Link
-                                href={`/editor/${post.id}`}
-                                className={`p-1.5 rounded-lg text-stone-400 hover:text-stone-900 dark:hover:text-white transition-colors ${
-                                  isProcessing ? "pointer-events-none opacity-40" : ""
-                                }`}
-                                title="Chỉnh sửa bài viết"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Link>
-                              <button
-                                onClick={() => handleDelete(post.id, post.title)}
-                                disabled={isProcessing}
-                                className={`p-1.5 rounded-lg text-stone-400 hover:text-rose-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
-                                title="Xóa bài viết"
-                              >
-                                {isItemLoading ? (
-                                  <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
-                                ) : (
-                                  <Trash2 className="w-4 h-4" />
-                                )}
-                              </button>
-                            </>
-                          )}
+
+                          {/* Xóa bài viết */}
+                          <button
+                            disabled={isProcessing}
+                            onClick={() => handleDelete(post.id, post.title)}
+                            className="p-2 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors disabled:opacity-40"
+                            title="Xóa bài viết"
+                          >
+                            {isItemLoading ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -594,7 +587,7 @@ export default function AdminPostsPage() {
 
           {/* Pagination Controls */}
           {totalPages > 1 && (
-            <div className="p-4 border-t border-stone-100 dark:border-stone-800/80 bg-stone-50/40 dark:bg-stone-900/30">
+            <div className="p-4 border-t border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/30">
               <Pagination
                 currentPage={validPage}
                 totalPages={totalPages}
@@ -608,6 +601,5 @@ export default function AdminPostsPage() {
         </div>
       )}
     </div>
-    </AdminGuard>
   );
 }

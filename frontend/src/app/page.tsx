@@ -7,6 +7,7 @@ import { fetchCategories, fetchPosts, fetchLatestSeries, getFullCourseImageUrl, 
 import { Category, PaginatedPosts, Series } from "@/lib/types";
 import { PostCard } from "@/components/blog/PostCard";
 import { useLoading } from "@/lib/loading-context";
+import { Pagination } from "@/components/common/Pagination";
 
 function formatCourseDuration(minutes?: number) {
   if (!minutes || minutes <= 0) return null;
@@ -332,24 +333,15 @@ export default function HomePage() {
 
         {/* Pagination Controls */}
         {postsData && postsData.total_pages > 1 && (
-          <div className="flex items-center justify-center gap-2 pt-8">
-            <button
-              disabled={currentPage <= 1}
-              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-              className="px-3.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs font-semibold disabled:opacity-40 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
-            >
-              Trang trước
-            </button>
-            <span className="text-xs text-stone-500 font-medium px-2">
-              Trang {currentPage} / {postsData.total_pages}
-            </span>
-            <button
-              disabled={currentPage >= postsData.total_pages}
-              onClick={() => handlePageChange(Math.min(postsData.total_pages, currentPage + 1))}
-              className="px-3.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs font-semibold disabled:opacity-40 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
-            >
-              Trang tiếp
-            </button>
+          <div className="pt-8">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={postsData.total_pages}
+              totalItems={postsData.total}
+              itemsName="bài viết"
+              onPageChange={handlePageChange}
+              disabled={loading}
+            />
           </div>
         )}
       </section>

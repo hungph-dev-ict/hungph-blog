@@ -24,10 +24,10 @@ export const AdminNav: React.FC<AdminNavProps> = ({
   const tabs: { key: AdminTab; label: string; href: string; icon: React.ComponentType<{ className?: string }>; adminOnly: boolean }[] = [
     {
       key: "posts",
-      label: isAdmin ? "Quản lý bài viết" : "Bài viết của tôi",
+      label: "Quản lý bài viết",
       href: "/admin/posts",
       icon: FileText,
-      adminOnly: false,
+      adminOnly: true,
     },
     {
       key: "users",
