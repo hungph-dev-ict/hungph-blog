@@ -1721,6 +1721,7 @@ class PostReportResponse(PydanticBase):
     id: str
     post_id: str
     post_title: Optional[str] = None
+    post_slug: Optional[str] = None
     reporter_id: Optional[str] = None
     reporter_username: Optional[str] = None
     reason: str
@@ -1794,6 +1795,7 @@ async def list_reports(
             id=r.id,
             post_id=r.post_id,
             post_title=post.title if post else None,
+            post_slug=post.slug if post else None,
             reporter_id=r.reporter_id,
             reporter_username=reporter.username if reporter else None,
             reason=r.reason,
@@ -1830,6 +1832,7 @@ async def update_report(
         id=report.id,
         post_id=report.post_id,
         post_title=post.title if post else None,
+        post_slug=post.slug if post else None,
         reporter_id=report.reporter_id,
         reporter_username=reporter.username if reporter else None,
         reason=report.reason,

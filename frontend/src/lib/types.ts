@@ -197,6 +197,7 @@ export interface PostReport {
   id: string;
   post_id: string;
   post_title?: string;
+  post_slug?: string;
   reporter_id?: string;
   reporter_username?: string;
   reason: string;
