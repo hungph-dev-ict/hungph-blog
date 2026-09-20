@@ -14,9 +14,23 @@ import {
   Send,
   X,
   ShieldCheck,
+  Plus,
+  Edit3,
+  Trash2,
+  FilePlus,
+  Loader2,
+  Clock,
 } from "lucide-react";
-import { getCollaborators, getFullImageUrl, requestCollaboration } from "@/lib/api";
-import { SeriesDetail } from "@/lib/types";
+import {
+  getCollaborators,
+  getFullImageUrl,
+  requestCollaboration,
+  addChapter,
+  updateChapter,
+  deleteChapter,
+  fetchSeriesBySlug,
+} from "@/lib/api";
+import { Chapter, SeriesDetail } from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
 import { buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
 
@@ -28,10 +42,16 @@ interface SeriesDetailClientProps {
   initialSeries: SeriesDetail;
 }
 
-export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialSeries: series }) => {
+export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialSeries }) => {
   const router = useRouter();
   const { user, token } = useAuth();
   const { withLoading } = useLoading();
+
+  const [series, setSeries] = useState<SeriesDetail>(initialSeries);
+  useEffect(() => {
+    setSeries(initialSeries);
+  }, [initialSeries]);
+
   const [showCollabModal, setShowCollabModal] = useState(false);
   const [showManageCollabModal, setShowManageCollabModal] = useState(false);
   const [pendingCollabCount, setPendingCollabCount] = useState(0);
@@ -40,11 +60,29 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
   const [collabSuccess, setCollabSuccess] = useState(false);
   const [collabError, setCollabError] = useState("");
   const [isAlreadyCollaborator, setIsAlreadyCollaborator] = useState(false);
+  const [isPendingCollaborator, setIsPendingCollaborator] = useState(false);
 
   const isAuthor = Boolean(user && series.author?.id && user.id === series.author.id);
   const isAdmin = Boolean(user && (user.is_admin || user.role === "admin"));
   const canManageCollab = isAuthor || isAdmin;
-  const showCollabButton = !canManageCollab && !isAlreadyCollaborator;
+  const canEditOutline = isAuthor || isAdmin || isAlreadyCollaborator;
+  const showCollabButton = !canManageCollab && !isAlreadyCollaborator && !isPendingCollaborator;
+
+  // Chapter outline management state
+  const [showCreateChapterModal, setShowCreateChapterModal] = useState(false);
+  const [createChapterLevel, setCreateChapterLevel] = useState<number>(1);
+  const [parentChapter, setParentChapter] = useState<Chapter | null>(null);
+  const [chapterTitleInput, setChapterTitleInput] = useState("");
+  const [chapterDescInput, setChapterDescInput] = useState("");
+  const [isCreatingChapter, setIsCreatingChapter] = useState(false);
+  const [createChapterError, setCreateChapterError] = useState("");
+
+  const [showEditChapterModal, setShowEditChapterModal] = useState(false);
+  const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
+  const [editChapterTitle, setEditChapterTitle] = useState("");
+  const [editChapterDesc, setEditChapterDesc] = useState("");
+  const [isUpdatingChapter, setIsUpdatingChapter] = useState(false);
+  const [editChapterError, setEditChapterError] = useState("");
 
   // Check if current user is already a collaborator and get pending count
   useEffect(() => {
@@ -52,6 +90,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
     getCollaborators(series.id, token)
       .then((collabs) => {
         setIsAlreadyCollaborator(collabs.some((c) => c.user_id === user.id && c.status === "accepted"));
+        setIsPendingCollaborator(collabs.some((c) => c.user_id === user.id && c.status === "pending"));
         const pending = collabs.filter((c) => c.status === "pending").length;
         setPendingCollabCount(pending);
       })
@@ -93,6 +132,94 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
         setCollabSubmitting(false);
       }
     }, "Đang gửi yêu cầu cộng tác...");
+  };
+
+  const handleOpenCreateChapter = (level: number, parent?: Chapter) => {
+    setCreateChapterLevel(level);
+    setParentChapter(parent || null);
+    setChapterTitleInput("");
+    setChapterDescInput("");
+    setCreateChapterError("");
+    setShowCreateChapterModal(true);
+  };
+
+  const handleCreateChapterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !chapterTitleInput.trim()) return;
+    setIsCreatingChapter(true);
+    setCreateChapterError("");
+
+    await withLoading(async () => {
+      try {
+        await addChapter(
+          series.id,
+          {
+            title: chapterTitleInput.trim(),
+            description: chapterDescInput.trim() || undefined,
+            parent_id: parentChapter?.id || undefined,
+            level: createChapterLevel,
+          },
+          token
+        );
+        setShowCreateChapterModal(false);
+        const refreshed = await fetchSeriesBySlug(series.slug);
+        setSeries(refreshed);
+      } catch (err: unknown) {
+        setCreateChapterError(err instanceof Error ? err.message : "Tạo thất bại");
+      } finally {
+        setIsCreatingChapter(false);
+      }
+    }, "Đang tạo mục mới...");
+  };
+
+  const handleOpenEditChapter = (ch: Chapter) => {
+    setEditingChapterId(ch.id);
+    setEditChapterTitle(ch.title);
+    setEditChapterDesc(ch.description || "");
+    setEditChapterError("");
+    setShowEditChapterModal(true);
+  };
+
+  const handleEditChapterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !editingChapterId || !editChapterTitle.trim()) return;
+    setIsUpdatingChapter(true);
+    setEditChapterError("");
+
+    await withLoading(async () => {
+      try {
+        await updateChapter(
+          editingChapterId,
+          {
+            title: editChapterTitle.trim(),
+            description: editChapterDesc.trim() || undefined,
+          },
+          token
+        );
+        setShowEditChapterModal(false);
+        const refreshed = await fetchSeriesBySlug(series.slug);
+        setSeries(refreshed);
+      } catch (err: unknown) {
+        setEditChapterError(err instanceof Error ? err.message : "Cập nhật thất bại");
+      } finally {
+        setIsUpdatingChapter(false);
+      }
+    }, "Đang lưu thay đổi...");
+  };
+
+  const handleDeleteChapter = async (chapterId: string, title: string) => {
+    if (!token) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa mục "${title}"?`)) return;
+
+    await withLoading(async () => {
+      try {
+        await deleteChapter(chapterId, token);
+        const refreshed = await fetchSeriesBySlug(series.slug);
+        setSeries(refreshed);
+      } catch (err: unknown) {
+        alert(err instanceof Error ? err.message : "Xóa thất bại");
+      }
+    }, "Đang xóa mục...");
   };
 
   // Find first lesson for the "Start Course" button
@@ -171,6 +298,18 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                     </span>
                   )}
                 </button>
+              )}
+              {isAlreadyCollaborator && (
+                <div className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold border border-emerald-300 dark:border-emerald-800 shadow-xs">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Bạn là Cộng tác viên biên soạn</span>
+                </div>
+              )}
+              {isPendingCollaborator && (
+                <div className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-xs font-semibold border border-amber-300 dark:border-amber-800 shadow-xs">
+                  <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <span>Yêu cầu cộng tác đang chờ tác giả duyệt</span>
+                </div>
               )}
               {showCollabButton && (
                 <button
@@ -256,7 +395,33 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                   Đề Cương Chi Tiết ({tree.length} {levels[0]})
                 </span>
               </div>
+              {canEditOutline && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenCreateChapter(1, undefined)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Thêm {levels[0]} mới</span>
+                </button>
+              )}
             </div>
+
+            {flatList.length === 0 && (
+              <div className="text-center py-12 px-4 rounded-3xl border border-dashed border-stone-200 dark:border-stone-800 space-y-3">
+                <p className="text-sm text-stone-500">Khóa học này chưa có nội dung lộ trình nào.</p>
+                {canEditOutline && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCreateChapter(1, undefined)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tạo {levels[0]} đầu tiên</span>
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="space-y-4">
               {flatList.map((chapter) => {
@@ -311,10 +476,58 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                           </p>
                         )}
                       </div>
-                      <span className="text-xs font-medium text-stone-400 shrink-0">
-                        {chapter.lessons?.length || 0} bài học
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-medium text-stone-400">
+                          {chapter.lessons?.length || 0} bài học
+                        </span>
+                        {canEditOutline && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditChapter(chapter)}
+                              title="Sửa tên mục"
+                              className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            {(!chapter.lessons || chapter.lessons.length === 0) && (!chapter.children || chapter.children.length === 0) && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteChapter(chapter.id, chapter.title)}
+                                title="Xóa mục trống"
+                                className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Author / Collaborator Quick Actions */}
+                    {canEditOutline && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-stone-100 dark:border-stone-800">
+                        <Link
+                          href={`/editor/new?series_id=${series.id}&series_slug=${series.slug}&chapter_id=${chapter.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-xs font-semibold border border-blue-200 dark:border-blue-800/80 transition-colors"
+                        >
+                          <FilePlus className="w-3.5 h-3.5" />
+                          <span>Viết bài vào mục này</span>
+                        </Link>
+
+                        {lvl < levels.length && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCreateChapter(lvl + 1, chapter)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold border border-stone-200 dark:border-stone-700 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Thêm {levels[lvl]} con</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     {/* Lessons in this chapter */}
                     {chapter.lessons && chapter.lessons.length > 0 ? (
@@ -462,6 +675,201 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
               onCountChange={(pending) => setPendingCollabCount(pending)}
               onClose={() => setShowManageCollabModal(false)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Modal Thêm Chương / Module Mới */}
+      {showCreateChapterModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => !isCreatingChapter && setShowCreateChapterModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-6 sm:p-8 w-full max-w-lg shadow-2xl space-y-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-stone-900 dark:text-white">
+                    Thêm mục mới
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Cấp {createChapterLevel}
+                    {parentChapter ? ` • Thuộc: ${parentChapter.title}` : ""}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isCreatingChapter}
+                onClick={() => setShowCreateChapterModal(false)}
+                className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {createChapterError && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-600 font-medium">
+                {createChapterError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateChapterSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                  Tên mục <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={chapterTitleInput}
+                  onChange={(e) => setChapterTitleInput(e.target.value)}
+                  placeholder="Ví dụ: Giới thiệu & Cài đặt"
+                  className="w-full text-sm p-3 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                  Mô tả ngắn (tùy chọn)
+                </label>
+                <textarea
+                  rows={3}
+                  value={chapterDescInput}
+                  onChange={(e) => setChapterDescInput(e.target.value)}
+                  placeholder="Mô tả mục tiêu của phần này..."
+                  className="w-full text-sm p-3 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isCreatingChapter}
+                  onClick={() => setShowCreateChapterModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingChapter || !chapterTitleInput.trim()}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all"
+                >
+                  {isCreatingChapter ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang tạo...</span>
+                    </>
+                  ) : (
+                    <span>Tạo mục</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Chỉnh Sửa Tên Mục */}
+      {showEditChapterModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => !isUpdatingChapter && setShowEditChapterModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-6 sm:p-8 w-full max-w-lg shadow-2xl space-y-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-stone-900 dark:text-white">
+                    Chỉnh sửa mục
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Cập nhật tên và mô tả mục
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isUpdatingChapter}
+                onClick={() => setShowEditChapterModal(false)}
+                className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {editChapterError && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-600 font-medium">
+                {editChapterError}
+              </div>
+            )}
+
+            <form onSubmit={handleEditChapterSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                  Tên mục <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={editChapterTitle}
+                  onChange={(e) => setEditChapterTitle(e.target.value)}
+                  className="w-full text-sm p-3 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                  Mô tả ngắn (tùy chọn)
+                </label>
+                <textarea
+                  rows={3}
+                  value={editChapterDesc}
+                  onChange={(e) => setEditChapterDesc(e.target.value)}
+                  className="w-full text-sm p-3 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isUpdatingChapter}
+                  onClick={() => setShowEditChapterModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingChapter || !editChapterTitle.trim()}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all"
+                >
+                  {isUpdatingChapter ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <span>Lưu thay đổi</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

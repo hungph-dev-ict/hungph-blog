@@ -1037,6 +1037,13 @@ async def update_series(
 ):
     s = await check_series_edit_permission(db, series_id, current_user)
 
+    is_admin = current_user.is_admin or getattr(current_user, "role", "") == "admin"
+    if not is_admin and s.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cộng tác viên chỉ có quyền biên soạn bài viết và dàn ý, không thể thay đổi thông tin cài đặt chung của khóa học"
+        )
+
     if series_in.title:
         s.title = series_in.title.strip()
     if series_in.slug:
@@ -1496,10 +1503,18 @@ async def get_collaborators(
 
     is_admin = current_user.is_admin or getattr(current_user, "role", "") == "admin"
     is_owner = series.owner_id == current_user.id
-    if not is_admin and not is_owner:
-        raise HTTPException(status_code=403, detail="Chỉ chủ khoá học hoặc Quản trị viên mới xem được")
 
-    collabs_stmt = select(SeriesCollaborator).where(SeriesCollaborator.series_id == series_id)
+    if is_admin or is_owner:
+        collabs_stmt = select(SeriesCollaborator).where(SeriesCollaborator.series_id == series_id)
+    else:
+        collabs_stmt = select(SeriesCollaborator).where(
+            SeriesCollaborator.series_id == series_id,
+            or_(
+                SeriesCollaborator.status == "accepted",
+                SeriesCollaborator.user_id == current_user.id
+            )
+        )
+
     collabs = (await db.execute(collabs_stmt)).scalars().all()
 
     result = []
@@ -1513,7 +1528,7 @@ async def get_collaborators(
                 full_name=user.full_name,
                 avatar_url=user.avatar_url,
                 status=c.status,
-                message=c.message,
+                message=c.message if (is_admin or is_owner or c.user_id == current_user.id) else None,
                 created_at=c.created_at,
             ))
     return result

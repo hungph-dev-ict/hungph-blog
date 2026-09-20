@@ -21,6 +21,8 @@ import {
   ListOrdered,
   Check,
   Loader2,
+  Plus,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useLoading } from "@/lib/loading-context";
@@ -35,6 +37,7 @@ import {
   fetchSeriesBySlug,
   uploadMedia,
   getFullImageUrl,
+  addChapter,
 } from "@/lib/api";
 import { Category, Chapter, PostDetail, Series, SeriesDetail } from "@/lib/types";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -93,6 +96,14 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
   const [showNewCatModal, setShowNewCatModal] = useState(false);
   const [newCatName, setNewCatName] = useState("");
+
+  // Inline Chapter Creation state
+  const [showAddChapterModal, setShowAddChapterModal] = useState(false);
+  const [addingLevelIdx, setAddingLevelIdx] = useState<number | null>(null);
+  const [newChapterTitle, setNewChapterTitle] = useState("");
+  const [newChapterDesc, setNewChapterDesc] = useState("");
+  const [isAddingChapter, setIsAddingChapter] = useState(false);
+  const [addChapterError, setAddChapterError] = useState("");
 
   // Check auth
   useEffect(() => {
@@ -255,6 +266,11 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     const targetChapter = chapterList.find((c) => c.id === chapterId);
     if (!targetChapter) return;
 
+    if (!postId) {
+      const existingLessons = (targetChapter.lessons || []).filter((l) => l.id !== postId);
+      setOrderInChapter(existingLessons.length + 1);
+    }
+
     // Lần ngược từ targetChapter lên root để lấy toàn bộ chuỗi id
     const path: Chapter[] = [targetChapter];
     let curr = targetChapter;
@@ -269,7 +285,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     }
 
     setSelectedLevelIds(path.map((c) => c.id));
-  }, [chapterId, chapterList]);
+  }, [chapterId, chapterList, postId]);
 
   // Auto generate slug from title when typing
   const handleTitleChange = (val: string) => {
@@ -306,6 +322,70 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         alert(`Lỗi tạo danh mục: ${err.message}`);
       }
     }, "Đang tạo chuyên mục mới...");
+  };
+
+  const handleOpenAddChapter = (levelIdx: number) => {
+    setAddingLevelIdx(levelIdx);
+    setNewChapterTitle("");
+    setNewChapterDesc("");
+    setAddChapterError("");
+    setShowAddChapterModal(true);
+  };
+
+  const handleCreateChapterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !seriesId || addingLevelIdx === null) return;
+    if (!newChapterTitle.trim()) {
+      setAddChapterError("Vui lòng nhập tên.");
+      return;
+    }
+
+    const lvlIdx = addingLevelIdx;
+    const parentId = lvlIdx === 0 ? undefined : selectedLevelIds[lvlIdx - 1];
+    const computedLevel = lvlIdx + 1;
+
+    setIsAddingChapter(true);
+    setAddChapterError("");
+
+    try {
+      const existingInSameParent = chapterList.filter((c) =>
+        lvlIdx === 0 ? !c.parent_id || c.level === 1 : c.parent_id === parentId
+      );
+      const nextOrder = existingInSameParent.length + 1;
+
+      const created = await addChapter(
+        seriesId,
+        {
+          title: newChapterTitle.trim(),
+          description: newChapterDesc.trim() || undefined,
+          parent_id: parentId,
+          level: computedLevel,
+          order: nextOrder,
+        },
+        token
+      );
+
+      setChapterList((prev) => [...prev, created]);
+
+      const updated = [...selectedLevelIds];
+      updated[lvlIdx] = created.id;
+      for (let i = lvlIdx + 1; i < hierarchyLevels.length; i++) {
+        updated[i] = "";
+      }
+      setSelectedLevelIds(updated);
+
+      if (lvlIdx === hierarchyLevels.length - 1) {
+        setChapterId(created.id);
+      } else {
+        setChapterId("");
+      }
+
+      setShowAddChapterModal(false);
+    } catch (err: unknown) {
+      setAddChapterError(err instanceof Error ? err.message : "Tạo thất bại");
+    } finally {
+      setIsAddingChapter(false);
+    }
   };
 
   const handleSubmit = async (publishStatus: boolean) => {
@@ -618,17 +698,29 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
                           style={{ paddingLeft: `${idx * 8}px` }}
                           className={`space-y-1 ${idx > 0 ? "border-l-2 border-blue-300 dark:border-blue-700" : ""}`}
                         >
-                          <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1">
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-stone-200 dark:bg-stone-700 font-bold">
-                              Cấp {idx + 1}
-                            </span>
-                            <span>{lvlName}:</span>
-                            {idx === hierarchyLevels.length - 1 && (
-                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                                (Cấp bài viết)
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1">
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-stone-200 dark:bg-stone-700 font-bold">
+                                Cấp {idx + 1}
                               </span>
+                              <span>{lvlName}:</span>
+                              {idx === hierarchyLevels.length - 1 && (
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                                  (Cấp bài viết)
+                                </span>
+                              )}
+                            </label>
+                            {isEnabled && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAddChapter(idx)}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline transition-colors"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>Thêm {lvlName}</span>
+                              </button>
                             )}
-                          </label>
+                          </div>
 
                           <select
                             disabled={!isEnabled}
@@ -644,6 +736,11 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
 
                               if (idx === hierarchyLevels.length - 1 && val) {
                                 setChapterId(val);
+                                if (!postId) {
+                                  const targetCh = chapterList.find((c) => c.id === val);
+                                  const existingCount = (targetCh?.lessons || []).filter((l) => l.id !== postId).length;
+                                  setOrderInChapter(existingCount + 1);
+                                }
                               } else {
                                 setChapterId("");
                               }
@@ -669,23 +766,19 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
                           </select>
 
                           {isEnabled && availableChapters.length === 0 && (
-                            <p className="text-[10px] text-amber-600 dark:text-amber-400 pl-1 italic">
-                              Chưa có {lvlName} nào được tạo thuộc mục trên. {isAdmin ? (
-                                <>
-                                  Vui lòng vào{" "}
-                                  <Link
-                                    href={`/admin/series`}
-                                    target="_blank"
-                                    className="underline font-semibold"
-                                  >
-                                    Quản lý Khóa học
-                                  </Link>{" "}
-                                  để tạo {lvlName}!
-                                </>
-                              ) : (
-                                `Vui lòng liên hệ Quản trị viên để tạo thêm ${lvlName}.`
-                              )}
-                            </p>
+                            <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-center justify-between gap-2">
+                              <p className="text-[10px] text-amber-700 dark:text-amber-400 italic">
+                                Chưa có {lvlName} nào thuộc mục trên.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAddChapter(idx)}
+                                className="px-2 py-1 text-[10px] font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-md shrink-0 flex items-center gap-1 transition-colors shadow-xs"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>Tạo {lvlName} ngay</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       );
@@ -1008,6 +1101,121 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
           </div>
         </div>
       </div>
+
+      {/* Inline Add Chapter/Module Modal */}
+      {showAddChapterModal && addingLevelIdx !== null && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !isAddingChapter && setShowAddChapterModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-6 sm:p-7 w-full max-w-md shadow-2xl space-y-5 animate-in fade-in zoom-in duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900 dark:text-white">
+                    Thêm {hierarchyLevels[addingLevelIdx] || "mục"} mới
+                  </h3>
+                  <p className="text-[11px] text-stone-500">
+                    Cấp {addingLevelIdx + 1}: {hierarchyLevels[addingLevelIdx] || "Mục"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isAddingChapter}
+                onClick={() => setShowAddChapterModal(false)}
+                className="p-1.5 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {addingLevelIdx > 0 && selectedLevelIds[addingLevelIdx - 1] && (
+              <div className="px-3 py-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/60 text-xs text-blue-800 dark:text-blue-300">
+                <span className="font-semibold text-[11px] uppercase tracking-wider block text-blue-600 dark:text-blue-400 mb-0.5">
+                  Mục cha ({hierarchyLevels[addingLevelIdx - 1]}):
+                </span>
+                <span className="font-medium">
+                  {chapterList.find((c) => c.id === selectedLevelIds[addingLevelIdx - 1])?.title || "Đã chọn"}
+                </span>
+              </div>
+            )}
+
+            {addChapterError && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-600 font-medium">
+                {addChapterError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateChapterSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                  Tên {hierarchyLevels[addingLevelIdx] || "mục"} <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={newChapterTitle}
+                  onChange={(e) => setNewChapterTitle(e.target.value)}
+                  placeholder={`Ví dụ: ${
+                    addingLevelIdx === 0
+                      ? "Phần 1: Khởi động"
+                      : hierarchyLevels[addingLevelIdx] === "Chương"
+                      ? "Chương 1: Cài đặt môi trường"
+                      : "Mục 1: Giới thiệu"
+                  }`}
+                  className="w-full text-xs px-3 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/80 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                  Mô tả ngắn (tùy chọn)
+                </label>
+                <textarea
+                  rows={2}
+                  value={newChapterDesc}
+                  onChange={(e) => setNewChapterDesc(e.target.value)}
+                  placeholder="Mô tả mục tiêu của phần này..."
+                  className="w-full text-xs px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/80 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  disabled={isAddingChapter}
+                  onClick={() => setShowAddChapterModal(false)}
+                  className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAddingChapter || !newChapterTitle.trim()}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all"
+                >
+                  {isAddingChapter ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang tạo...</span>
+                    </>
+                  ) : (
+                    <span>Tạo {hierarchyLevels[addingLevelIdx] || "mục"}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
