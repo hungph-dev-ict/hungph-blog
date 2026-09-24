@@ -17,6 +17,8 @@ from app.modules.rag.router import router as rag_router
 from app.modules.utilities.router import router as utilities_router
 from app.modules.social.models import Follow, Notification  # registers tables
 from app.modules.social.router import router as social_router
+from app.modules.audit.models import AuditLog  # registers audit_logs table
+from app.modules.audit.router import router as audit_router
 
 
 async def init_default_data():
@@ -303,6 +305,7 @@ app.include_router(media_router, prefix=settings.API_V1_STR)
 app.include_router(rag_router, prefix=settings.API_V1_STR)
 app.include_router(utilities_router, prefix=settings.API_V1_STR)
 app.include_router(social_router, prefix=settings.API_V1_STR)
+app.include_router(audit_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

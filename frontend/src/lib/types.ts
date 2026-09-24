@@ -171,7 +171,15 @@ export interface FollowStatus {
 
 export interface Notification {
   id: string;
-  type: "collab_request" | "collab_accepted" | "collab_rejected" | "new_follower" | "new_post";
+  type:
+    | "collab_request"
+    | "collab_accepted"
+    | "collab_rejected"
+    | "new_follower"
+    | "new_post"
+    | "new_comment"
+    | "new_comment_reply"
+    | (string & {});
   actor_id?: string;
   actor?: UserBrief;
   target_id?: string;
@@ -218,4 +226,35 @@ export const REPORT_REASONS: Record<string, string> = {
   copyright: "Vi phạm bản quyền",
   other: "Lý do khác",
 };
+
+export interface AuditLog {
+  id: string;
+  user_id?: string;
+  actor_name?: string;
+  actor_email?: string;
+  action: string;
+  target_type?: string;
+  target_id?: string;
+  target_title?: string;
+  summary: string;
+  details?: string;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
+}
+
+export interface AuditLogListResponse {
+  total: number;
+  page: number;
+  limit: number;
+  items: AuditLog[];
+}
+
+export interface AuditStats {
+  today_activities: number;
+  total_posts_created: number;
+  total_comments: number;
+  total_reports: number;
+}
+
 

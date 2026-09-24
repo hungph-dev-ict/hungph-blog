@@ -17,6 +17,9 @@ import {
   UploadResponse,
   User,
   UserProfile,
+  AuditLog,
+  AuditLogListResponse,
+  AuditStats,
 } from "./types";
 
 export const API_BASE_URL =
@@ -782,6 +785,48 @@ export async function updateMyProfile(
   }
   return res.json();
 }
+
+// ── Admin: Audit Logs ──────────────────────────────────────────
+
+export async function getAuditLogs(
+  params: {
+    page?: number;
+    limit?: number;
+    action?: string;
+    target_type?: string;
+    search?: string;
+  },
+  token: string
+): Promise<AuditLogListResponse> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.action) query.set("action", params.action);
+  if (params.target_type) query.set("target_type", params.target_type);
+  if (params.search) query.set("search", params.search);
+
+  const qs = query.toString() ? `?${query.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}/admin/audit-logs${qs}`, {
+    headers: getHeaders(token),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể tải nhật ký hệ thống");
+  }
+  return res.json();
+}
+
+export async function getAuditStats(token: string): Promise<AuditStats> {
+  const res = await fetch(`${API_BASE_URL}/admin/audit-logs/stats`, {
+    headers: getHeaders(token),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể tải thống kê nhật ký");
+  }
+  return res.json();
+}
+
 
 
 

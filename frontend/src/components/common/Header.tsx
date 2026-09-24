@@ -25,6 +25,8 @@ const NOTIF_ICONS: Record<string, string> = {
   collab_rejected: "❌",
   new_follower: "👤",
   new_post: "📝",
+  new_comment: "💬",
+  new_comment_reply: "💭",
 };
 
 export const Header: React.FC = () => {
@@ -104,8 +106,8 @@ export const Header: React.FC = () => {
       }
     } else if (n.type === "collab_accepted" && n.target_id) {
       router.push(`/series?id=${n.target_id}`);
-    } else if (n.type === "new_post" && n.target_id) {
-      router.push(`/posts/${n.target_id}`);
+    } else if ((n.type === "new_post" || n.type === "new_comment" || n.type === "new_comment_reply") && n.target_id) {
+      router.push(`/posts/${n.target_id}#comments`);
     }
   };
 

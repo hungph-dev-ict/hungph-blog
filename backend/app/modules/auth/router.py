@@ -3,7 +3,7 @@ import json
 from typing import List
 import urllib.request
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,12 +13,13 @@ from app.core.security import create_access_token, get_password_hash, verify_pas
 from app.modules.auth.deps import get_current_admin, get_current_user
 from app.modules.auth.models import User
 from app.modules.auth.schemas import GoogleAuthRequest, Token, UserCreate, UserLogin, UserResponse, UserRoleUpdate, UserProfileUpdate
+from app.modules.audit.service import record_audit_log
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/login", response_model=Token)
-async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(credentials: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
     identifier = credentials.username_or_email.lower().strip()
     stmt = select(User).where((User.email == identifier) | (User.username == identifier))
     result = await db.execute(stmt)
@@ -33,6 +34,22 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Inactive user")
 
     access_token = create_access_token(subject=user.id)
+
+    # Ghi audit log đăng nhập
+    try:
+        await record_audit_log(
+            db=db,
+            action="USER_LOGIN",
+            summary=f"Người dùng {user.full_name or user.username} ({user.email}) đã đăng nhập hệ thống",
+            user=user,
+            target_type="auth",
+            target_id=user.id,
+            details={"login_method": "password", "username": user.username},
+            request=request,
+        )
+    except Exception:
+        pass
+
     return Token(
         access_token=access_token,
         token_type="bearer",
@@ -41,7 +58,7 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/google", response_model=Token)
-async def google_login(payload: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
+async def google_login(payload: GoogleAuthRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Đăng nhập hoặc đăng ký bằng Google SSO cho độc giả & quản trị viên."""
     email = None
     name = None
@@ -126,6 +143,22 @@ async def google_login(payload: GoogleAuthRequest, db: AsyncSession = Depends(ge
             await db.refresh(user)
 
     access_token = create_access_token(subject=user.id)
+
+    # Ghi audit log đăng nhập Google SSO
+    try:
+        await record_audit_log(
+            db=db,
+            action="USER_LOGIN",
+            summary=f"Người dùng {user.full_name or user.username} ({user.email}) đã đăng nhập bằng Google SSO",
+            user=user,
+            target_type="auth",
+            target_id=user.id,
+            details={"login_method": "google_oauth", "email": user.email},
+            request=request,
+        )
+    except Exception:
+        pass
+
     return Token(
         access_token=access_token,
         token_type="bearer",
@@ -168,6 +201,7 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
 @router.put("/me", response_model=UserResponse)
 async def update_my_profile(
     payload: UserProfileUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -181,6 +215,22 @@ async def update_my_profile(
 
     await db.commit()
     await db.refresh(current_user)
+
+    # Ghi audit log cập nhật profile
+    try:
+        await record_audit_log(
+            db=db,
+            action="USER_UPDATE_PROFILE",
+            summary=f"Người dùng {current_user.full_name or current_user.username} đã cập nhật thông tin cá nhân",
+            user=current_user,
+            target_type="user",
+            target_id=current_user.id,
+            details={"has_bio": bool(current_user.bio), "has_avatar": bool(current_user.avatar_url)},
+            request=request,
+        )
+    except Exception:
+        pass
+
     return current_user
 
 

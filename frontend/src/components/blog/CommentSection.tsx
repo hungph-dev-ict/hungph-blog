@@ -309,7 +309,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
                       </button>
                       <button
                         onClick={() => handleDelete(comment.id)}
-                        className="flex items-center gap-1 text-[11px] font-medium text-stone-400 hover:text-rose-500 transition-colors"
+                        className="flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 transition-colors"
                         title="Thu hồi bình luận"
                       >
                         <Trash2 className="w-3 h-3" />
@@ -423,10 +423,11 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
                             </button>
                             <button
                               onClick={() => handleDelete(reply.id)}
-                              className="p-1 text-stone-400 hover:text-rose-500"
+                              className="p-1 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 flex items-center gap-1 text-[11px] font-semibold"
                               title="Thu hồi phản hồi"
                             >
                               <Trash2 className="w-3 h-3" />
+                              <span>Thu hồi</span>
                             </button>
                           </div>
                         )}

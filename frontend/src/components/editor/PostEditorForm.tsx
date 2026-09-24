@@ -29,6 +29,7 @@ import {
   Monitor,
   Smartphone,
   FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useLoading } from "@/lib/loading-context";
@@ -104,6 +105,138 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   const [newCatName, setNewCatName] = useState("");
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDeviceMode, setPreviewDeviceMode] = useState<"desktop" | "mobile">("desktop");
+
+  // Track initial state to detect unsaved changes
+  const initialDataRef = useRef<{
+    title: string;
+    slug: string;
+    summary: string;
+    contentHtml: string;
+    coverImage: string;
+    categoryId: string;
+    seriesId: string;
+    chapterId: string;
+    tagsInput: string;
+  }>({
+    title: "",
+    slug: "",
+    summary: "",
+    contentHtml: "<p></p>",
+    coverImage: "",
+    categoryId: "",
+    seriesId: "",
+    chapterId: "",
+    tagsInput: "",
+  });
+
+  const [hasSavedSuccessfully, setHasSavedSuccessfully] = useState(false);
+  const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
+  const [pendingNavigationUrl, setPendingNavigationUrl] = useState<string | null>(null);
+
+  // Compute if form has unsaved modifications
+  const isDirty = React.useMemo(() => {
+    if (hasSavedSuccessfully) return false;
+    if (!postId) {
+      // Bài mới: coi là có thay đổi nếu user nhập tiêu đề hoặc nội dung hoặc tóm tắt/ảnh bìa
+      const cleanContent = contentHtml ? contentHtml.replace(/<[^>]*>/g, "").trim() : "";
+      return (
+        title.trim().length > 0 ||
+        cleanContent.length > 0 ||
+        summary.trim().length > 0 ||
+        coverImage.trim().length > 0
+      );
+    }
+    // Bài đang chỉnh sửa: so sánh với giá trị khởi tạo ban đầu
+    const init = initialDataRef.current;
+    return (
+      title !== init.title ||
+      slug !== init.slug ||
+      summary !== init.summary ||
+      contentHtml !== init.contentHtml ||
+      coverImage !== init.coverImage ||
+      categoryId !== init.categoryId ||
+      seriesId !== init.seriesId ||
+      chapterId !== init.chapterId ||
+      tagsInput !== init.tagsInput
+    );
+  }, [
+    postId,
+    title,
+    slug,
+    summary,
+    contentHtml,
+    coverImage,
+    categoryId,
+    seriesId,
+    chapterId,
+    tagsInput,
+    hasSavedSuccessfully,
+  ]);
+
+  // 1. Chặn đóng tab / reload trình duyệt khi có dữ liệu chưa lưu
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "Bạn có chắc chắn muốn thoát không? Nội dung đang biên soạn sẽ không được lưu lại.";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  // 2. Chặn chuyển trang nội bộ (Click vào link hoặc nút chuyển trang)
+  useEffect(() => {
+    const handleAnchorClick = (e: MouseEvent) => {
+      if (!isDirty) return;
+
+      const target = (e.target as HTMLElement).closest("a");
+      if (!target) return;
+
+      const href = target.getAttribute("href");
+      if (!href || href.startsWith("#") || target.target === "_blank") return;
+
+      const currentPath = window.location.pathname + window.location.search;
+      if (href === currentPath) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingNavigationUrl(href);
+      setShowExitConfirmModal(true);
+    };
+
+    document.addEventListener("click", handleAnchorClick, true);
+    return () => document.removeEventListener("click", handleAnchorClick, true);
+  }, [isDirty]);
+
+  // 3. Chặn nút Back / Forward trình duyệt
+  useEffect(() => {
+    if (!isDirty) return;
+
+    window.history.pushState(null, "", window.location.href);
+
+    const handlePopState = () => {
+      if (isDirty) {
+        window.history.pushState(null, "", window.location.href);
+        setPendingNavigationUrl("BACK");
+        setShowExitConfirmModal(true);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isDirty]);
+
+  const handleConfirmExit = () => {
+    setHasSavedSuccessfully(true);
+    setShowExitConfirmModal(false);
+    if (pendingNavigationUrl === "BACK") {
+      window.history.go(-2);
+    } else if (pendingNavigationUrl) {
+      router.push(pendingNavigationUrl);
+    }
+  };
 
   // Toast Notification State
   const [toast, setToast] = useState<{
@@ -223,6 +356,19 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         if (data.chapter_id) setChapterId(data.chapter_id);
         if (data.order_in_chapter) setOrderInChapter(data.order_in_chapter);
         if (data.series_outline) setPostSeriesDetail(data.series_outline);
+
+        // Lưu bản gốc để theo dõi thay đổi chưa lưu
+        initialDataRef.current = {
+          title: data.title || "",
+          slug: data.slug || "",
+          summary: data.summary || "",
+          contentHtml: data.content_html || "<p></p>",
+          coverImage: data.cover_image || "",
+          categoryId: data.category?.id || "",
+          seriesId: data.series_id || "",
+          chapterId: data.chapter_id || "",
+          tagsInput: data.tags ? data.tags.map((t) => t.name).join(", ") : "",
+        };
       })
       .catch((err) => {
         if (err.message?.includes("403") || err.message?.includes("quyền") || err.status === 403) {
@@ -493,6 +639,19 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
 
         setSavedSlug(savedPost.slug);
         setIsPublished(savedPost.is_published);
+        setHasSavedSuccessfully(true);
+
+        initialDataRef.current = {
+          title: savedPost.title || "",
+          slug: savedPost.slug || "",
+          summary: savedPost.summary || "",
+          contentHtml: savedPost.content_html || "<p></p>",
+          coverImage: savedPost.cover_image || "",
+          categoryId: savedPost.category?.id || "",
+          seriesId: savedPost.series_id || "",
+          chapterId: savedPost.chapter_id || "",
+          tagsInput: savedPost.tags ? savedPost.tags.map((t) => t.name).join(", ") : "",
+        };
 
         const successMessage = publishStatus
           ? (isPublished ? "🎉 Bài viết đã được cập nhật thành công!" : "🎉 Bài viết đã được xuất bản công khai thành công!")
@@ -1729,6 +1888,51 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* DIALOG CẢNH BÁO THOÁT KHI CHƯA LƯU */}
+      {showExitConfirmModal && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-stone-900 dark:text-white">
+                  Rời khỏi trình soạn thảo?
+                </h3>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                  Thay đổi chưa được lưu hoặc xuất bản
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed bg-stone-50 dark:bg-stone-800/50 p-3.5 rounded-xl border border-stone-100 dark:border-stone-800">
+              Bạn có chắc chắn muốn thoát không? Nội dung đang biên soạn sẽ không được lưu lại.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExitConfirmModal(false);
+                  setPendingNavigationUrl(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors border border-stone-200 dark:border-stone-700 cursor-pointer"
+              >
+                Ở lại tiếp tục viết
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmExit}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-sm shadow-rose-500/20 cursor-pointer"
+              >
+                Rời khỏi không lưu
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

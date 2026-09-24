@@ -2,8 +2,8 @@ import json
 import math
 import re
 from datetime import datetime, timezone
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import List, Optional, Any
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from slugify import slugify
 from sqlalchemy import desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +14,7 @@ from app.modules.auth.deps import get_current_admin, get_current_user, get_optio
 from app.modules.auth.models import User
 from app.modules.blog.models import Category, Chapter, Comment, Post, PostLike, PostReport, Series, SeriesCollaborator, Tag, post_tags
 from app.modules.social.models import Follow, Notification
+from app.modules.audit.service import record_audit_log
 from app.modules.blog.schemas import (
     AuthorBrief,
     CategoryCreate,
@@ -562,6 +563,7 @@ async def notify_followers_new_post(db: AsyncSession, post: Post, author: User):
 @router.post("/posts", response_model=PostDetail, status_code=status.HTTP_201_CREATED)
 async def create_post(
     post_in: PostCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -622,6 +624,27 @@ async def create_post(
     if new_post.is_published:
         await notify_followers_new_post(db, new_post, current_user)
 
+    # Ghi audit log đăng bài mới
+    try:
+        status_str = "Đã xuất bản" if new_post.is_published else "Bản nháp"
+        await record_audit_log(
+            db=db,
+            action="POST_CREATE",
+            summary=f"{current_user.full_name or current_user.username} đã đăng bài mới: '{new_post.title}' ({status_str})",
+            user=current_user,
+            target_type="post",
+            target_id=new_post.slug,
+            target_title=new_post.title,
+            details={
+                "post_id": new_post.id,
+                "is_published": new_post.is_published,
+                "series_id": new_post.series_id,
+            },
+            request=request,
+        )
+    except Exception:
+        pass
+
     stmt = (
         select(Post)
         .where(Post.id == new_post.id)
@@ -642,6 +665,7 @@ async def create_post(
 async def update_post(
     post_id: str,
     post_in: PostUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -724,12 +748,39 @@ async def update_post(
     if post.is_published and not was_published:
         await notify_followers_new_post(db, post, current_user)
 
+    # Ghi audit log cập nhật bài viết
+    try:
+        action_type = "POST_UPDATE"
+        if post_in.is_published is not None and post_in.is_published != was_published:
+            action_type = "POST_PUBLISH" if post.is_published else "POST_UNPUBLISH"
+
+        status_str = "Đã xuất bản" if post.is_published else "Bản nháp"
+        await record_audit_log(
+            db=db,
+            action=action_type,
+            summary=f"{current_user.full_name or current_user.username} đã cập nhật bài viết: '{post.title}' ({status_str})",
+            user=current_user,
+            target_type="post",
+            target_id=post.slug,
+            target_title=post.title,
+            details={
+                "post_id": post.id,
+                "is_published": post.is_published,
+                "was_published": was_published,
+                "action_type": action_type,
+            },
+            request=request,
+        )
+    except Exception:
+        pass
+
     return PostDetail.model_validate(post)
 
 
 @router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_post(
     post_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -743,8 +794,29 @@ async def delete_post(
     if not is_admin and post.author_id != current_user.id:
         raise HTTPException(status_code=403, detail="Bạn chỉ có quyền xóa bài viết của chính mình")
 
+    post_title = post.title
+    post_slug = post.slug
+    post_author_id = post.author_id
+
     await db.delete(post)
     await db.commit()
+
+    # Ghi audit log xóa bài viết
+    try:
+        await record_audit_log(
+            db=db,
+            action="POST_DELETE",
+            summary=f"{current_user.full_name or current_user.username} đã xóa bài viết: '{post_title}'",
+            user=current_user,
+            target_type="post",
+            target_id=post_id,
+            target_title=post_title,
+            details={"slug": post_slug, "author_id": post_author_id},
+            request=request,
+        )
+    except Exception:
+        pass
+
     return None
 
 
@@ -1398,6 +1470,7 @@ async def list_comments(post_id_or_slug: str, db: AsyncSession = Depends(get_db)
 async def create_comment(
     post_id_or_slug: str,
     comment_in: CommentCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     optional_user: Optional[User] = Depends(get_optional_user)
 ):
@@ -1424,10 +1497,12 @@ async def create_comment(
         user_id = None
 
     # Nếu là phản hồi cho 1 bình luận khác
+    parent_comment = None
     if comment_in.parent_id:
         p_stmt = select(Comment).where(Comment.id == comment_in.parent_id, Comment.post_id == post.id)
         p_res = await db.execute(p_stmt)
-        if not p_res.scalar_one_or_none():
+        parent_comment = p_res.scalar_one_or_none()
+        if not parent_comment:
             raise HTTPException(status_code=404, detail="Bình luận cha không tồn tại")
 
     new_comment = Comment(
@@ -1443,6 +1518,65 @@ async def create_comment(
     db.add(new_comment)
     await db.commit()
     await db.refresh(new_comment)
+
+    # ── 1. Gửi thông báo khi bài viết có bình luận mới ──
+    try:
+        # Lấy tên tác giả bài viết
+        post_author_stmt = select(User).where(User.id == post.author_id)
+        post_author = (await db.execute(post_author_stmt)).scalar_one_or_none()
+        post_author_name = (post_author.full_name or post_author.username) if post_author else "Tác giả"
+
+        # Nếu người bình luận khác tác giả bài viết -> thông báo cho tác giả
+        if post.author_id and post.author_id != user_id:
+            db.add(Notification(
+                user_id=post.author_id,
+                actor_id=user_id,
+                type="new_comment",
+                target_id=post.slug,
+                target_type="post",
+                message=f"{author_name} đã bình luận bài viết của bạn: \"{post.title}\""
+            ))
+
+        # Nếu là phản hồi (reply) và người cha khác người reply và khác tác giả bài viết -> thông báo cho người cha
+        if parent_comment and parent_comment.user_id and parent_comment.user_id != user_id and parent_comment.user_id != post.author_id:
+            db.add(Notification(
+                user_id=parent_comment.user_id,
+                actor_id=user_id,
+                type="new_comment_reply",
+                target_id=post.slug,
+                target_type="post",
+                message=f"{author_name} đã phản hồi bình luận của bạn trong bài viết: \"{post.title}\""
+            ))
+
+        await db.commit()
+    except Exception as notif_err:
+        pass
+
+    # ── 2. Ghi Audit Log phục vụ điều tra an ninh (ai bình luận bài của ai) ──
+    try:
+        await record_audit_log(
+            db=db,
+            action="COMMENT_CREATE",
+            summary=f"{author_name} đã bình luận vào bài viết '{post.title}' của tác giả {post_author_name}",
+            user=optional_user,
+            actor_name=author_name,
+            actor_email=author_email,
+            target_type="post",
+            target_id=post.slug,
+            target_title=post.title,
+            details={
+                "comment_id": new_comment.id,
+                "content": content[:500],
+                "is_reply": bool(comment_in.parent_id),
+                "parent_comment_id": comment_in.parent_id,
+                "post_id": post.id,
+                "post_author_id": post.author_id,
+                "post_author_name": post_author_name,
+            },
+            request=request,
+        )
+    except Exception:
+        pass
 
     # Load lại kèm replies rỗng
     return CommentResponse(
@@ -1488,6 +1622,7 @@ async def update_comment(
 @router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_comment(
     comment_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -1501,8 +1636,27 @@ async def delete_comment(
     if not current_user.is_admin and comment.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Không có quyền xóa bình luận này")
 
+    comment_content = comment.content
+    comment_post_id = comment.post_id
+
     await db.delete(comment)
     await db.commit()
+
+    # Ghi audit log thu hồi bình luận
+    try:
+        await record_audit_log(
+            db=db,
+            action="COMMENT_DELETE",
+            summary=f"{current_user.full_name or current_user.username} đã thu hồi bình luận: '{comment_content[:60]}...'",
+            user=current_user,
+            target_type="comment",
+            target_id=comment_id,
+            details={"content": comment_content, "post_id": comment_post_id},
+            request=request,
+        )
+    except Exception:
+        pass
+
     return None
 
 
@@ -1870,6 +2024,7 @@ class PostReportUpdate(PydanticBase):
 async def report_post(
     post_id: str,
     body: PostReportCreate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1900,6 +2055,28 @@ async def report_post(
     )
     db.add(report)
     await db.commit()
+
+    # Ghi audit log tố cáo vi phạm
+    try:
+        await record_audit_log(
+            db=db,
+            action="POST_REPORT",
+            summary=f"{current_user.full_name or current_user.username} đã tố cáo bài viết '{post.title}' (Lý do: {body.reason})",
+            user=current_user,
+            target_type="post",
+            target_id=post.slug,
+            target_title=post.title,
+            details={
+                "post_id": post.id,
+                "reason": body.reason,
+                "description": body.description,
+                "author_id": post.author_id,
+            },
+            request=request,
+        )
+    except Exception:
+        pass
+
     return {"ok": True, "message": "Tố cáo đã được gửi. Chúng tôi sẽ xật lý sớm nhất có thể."}
 
 

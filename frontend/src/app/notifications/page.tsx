@@ -15,6 +15,8 @@ const NOTIF_ICONS: Record<string, string> = {
   collab_rejected: "❌",
   new_follower: "👤",
   new_post: "📝",
+  new_comment: "💬",
+  new_comment_reply: "💭",
 };
 
 const NOTIF_LABELS: Record<string, string> = {
@@ -23,6 +25,8 @@ const NOTIF_LABELS: Record<string, string> = {
   collab_rejected: "Cộng tác bị từ chối",
   new_follower: "Người theo dõi mới",
   new_post: "Bài viết mới",
+  new_comment: "Bình luận mới",
+  new_comment_reply: "Phản hồi mới",
 };
 
 export default function NotificationsPage() {
@@ -135,6 +139,15 @@ export default function NotificationsPage() {
                           ? "Xem và phê duyệt yêu cầu cộng tác →"
                           : "Xem khóa học →"}
                       </span>
+                    </Link>
+                  )}
+                  {n.target_id && n.target_type === "post" && (
+                    <Link
+                      href={`/posts/${n.target_id}#comments`}
+                      className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-1.5 inline-flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span>Xem bài viết và bình luận →</span>
                     </Link>
                   )}
                   <p className="text-xs text-stone-400 mt-1">{new Date(n.created_at).toLocaleString("vi-VN")}</p>

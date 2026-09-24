@@ -572,7 +572,7 @@ export default function MemberPostsManagePage() {
                             <button
                               onClick={() => handleDelete(post.id, post.title)}
                               disabled={isProcessing}
-                              className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                               title="Xóa bài viết"
                             >
                               {isItemLoading ? (

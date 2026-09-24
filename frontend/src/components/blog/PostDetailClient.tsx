@@ -392,9 +392,9 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                 <button
                   onClick={() => setShowReport(true)}
                   title="Tố cáo bài viết"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 text-xs font-medium text-stone-400 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-300 dark:border-rose-900 bg-rose-50/70 dark:bg-rose-950/30 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 hover:border-rose-400 transition-all shadow-xs"
                 >
-                  <Flag className="w-3.5 h-3.5" />
+                  <Flag className="w-3.5 h-3.5 fill-rose-500/20" />
                   <span className="hidden sm:inline">Tố cáo</span>
                 </button>
               )}
