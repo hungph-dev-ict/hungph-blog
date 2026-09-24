@@ -23,31 +23,38 @@ from app.modules.audit.router import router as audit_router
 
 async def init_default_data():
     """Tự động khởi tạo bảng và dữ liệu mẫu nếu database đang trống."""
-    async with engine.begin() as conn:
-        from sqlalchemy import text
-        # Bổ sung cột mới cho các bảng đã tồn tại TRƯỚC khi create_all
-        is_sqlite = "sqlite" in settings.DATABASE_URL
-        migrations = [
-            ("users", "avatar_url", "VARCHAR(500)"),
-            ("users", "google_id", "VARCHAR(100)"),
-            ("users", "role", "VARCHAR(20) DEFAULT 'member'"),
-            ("series", "owner_id", "VARCHAR(36)"),
-            ("series", "hierarchy_config", "TEXT DEFAULT '[\"Chương\"]'"),
-            ("series", "attribution_text", "TEXT"),
-            ("chapters", "parent_id", "VARCHAR(36)"),
-            ("chapters", "level", "INT DEFAULT 1"),
-            ("posts", "is_spotlight", "BOOLEAN DEFAULT FALSE"),
-        ]
-        for tbl, col, col_def in migrations:
-            try:
+    from sqlalchemy import text
+    is_sqlite = "sqlite" in settings.DATABASE_URL
+
+    # 1. Tạo tất cả bảng nếu chưa có
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        print(f"Lưu ý create_all: {e}")
+
+    # 2. Bổ sung các cột mới cho các bảng đã tồn tại từ trước (mỗi cột chạy trong transaction riêng biệt)
+    migrations = [
+        ("users", "avatar_url", "VARCHAR(500)"),
+        ("users", "bio", "VARCHAR(500)"),
+        ("users", "google_id", "VARCHAR(100)"),
+        ("users", "role", "VARCHAR(20) DEFAULT 'member'"),
+        ("series", "owner_id", "VARCHAR(36)"),
+        ("series", "hierarchy_config", "TEXT DEFAULT '[\"Chương\"]'"),
+        ("series", "attribution_text", "TEXT"),
+        ("chapters", "parent_id", "VARCHAR(36)"),
+        ("chapters", "level", "INT DEFAULT 1"),
+        ("posts", "is_spotlight", "BOOLEAN DEFAULT FALSE"),
+    ]
+    for tbl, col, col_def in migrations:
+        try:
+            async with engine.begin() as conn:
                 if is_sqlite:
                     await conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {col} {col_def};"))
                 else:
                     await conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {col_def};"))
-            except Exception:
-                pass
-        # Tạo tất cả bảng mới (new tables from social module)
-        await conn.run_sync(Base.metadata.create_all)
+        except Exception:
+            pass
 
     async with AsyncSessionLocal() as db:
         # Kiểm tra Admin
@@ -261,6 +268,41 @@ async def init_default_data():
             )
 
             db.add_all([lesson1, lesson2, lesson3])
+            await db.commit()
+
+        # Kiểm tra bài viết kiến trúc RAG
+        stmt_rag_post = select(Post).where(Post.slug == "kien-truc-rag-retrieval-augmented-generation-cua-blog")
+        res_rag_post = await db.execute(stmt_rag_post)
+        if not res_rag_post.scalars().first():
+            stmt_cat = select(Category).where(Category.slug == "ky-thuat-cong-nghe")
+            cat_res = await db.execute(stmt_cat)
+            cat_tech = cat_res.scalar_one_or_none()
+            rag_article = Post(
+                title="Kiến Trúc RAG (Retrieval-Augmented Generation) Của Blog Cá Nhân",
+                slug="kien-truc-rag-retrieval-augmented-generation-cua-blog",
+                summary="Chi tiết kiến trúc tìm kiếm ngữ nghĩa và hỏi đáp thông minh kết hợp FastAPI, FAISS Vector Index, và Google Gemini 2.5 Flash.",
+                content_html="""<h2>1. Tổng quan Kiến trúc RAG</h2>
+<p>Hệ thống RAG của Blog được thiết kế theo mô hình Hybrid Retrieval kết hợp Vector Similarity Search và mô hình ngôn ngữ lớn (LLM):</p>
+<ul>
+    <li><strong>Document Chunking &amp; Vectorization:</strong> Toàn bộ bài viết được chia nhỏ theo đoạn văn ngữ nghĩa và mã hóa thành vector embeddings bằng Google Generative AI (text-embedding-004).</li>
+    <li><strong>Fast Vector Search:</strong> Lưu trữ và truy vấn tương đồng bằng thuật toán FAISS (Facebook AI Similarity Search) hoặc pgvector, hỗ trợ lọc theo độ tương đồng Cosine.</li>
+    <li><strong>Augmented Generation:</strong> Các đoạn văn bản có độ liên quan cao nhất được trích xuất làm context và chuyển tới Gemini 2.5 Flash để tổng hợp câu trả lời chính xác, trung thực kèm trích dẫn nguồn.</li>
+</ul>
+<h2>2. Luồng xử lý câu hỏi</h2>
+<ol>
+    <li>Người dùng nhập câu hỏi tại giao diện Trợ lý AI.</li>
+    <li>Hệ thống embed câu hỏi và tìm kiếm top-K đoạn bài viết liên quan nhất.</li>
+    <li>Mô hình Gemini đối chiếu context và sinh câu trả lời tự nhiên bằng tiếng Việt.</li>
+    <li>Hiển thị nguồn tham chiếu (bài viết, chương) để độc giả kiểm chứng.</li>
+</ol>""",
+                cover_image="https://images.unsplash.com/photo-1677442136019-21780efad99a?auto=format&fit=crop&w=1200&q=80",
+                is_published=True,
+                is_spotlight=False,
+                reading_time_minutes=4,
+                author_id=admin.id if admin else None,
+                category_id=cat_tech.id if cat_tech else None,
+            )
+            db.add(rag_article)
             await db.commit()
 
 
