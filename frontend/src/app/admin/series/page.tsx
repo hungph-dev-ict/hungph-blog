@@ -436,7 +436,7 @@ function AdminSeriesContent() {
       <Breadcrumbs
         items={[
           { label: "Quản trị", href: "/admin/posts" },
-          { label: "Khóa học & Tuyển tập" },
+          { label: "Series" },
         ]}
       />
 
@@ -453,10 +453,10 @@ function AdminSeriesContent() {
           <div>
             <h1 className="text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
               <GraduationCap className="w-6 h-6 text-blue-600" />
-              <span>Quản Lý Khóa Học & Tuyển Tập (Series)</span>
+              <span>Quản Lý Series</span>
             </h1>
             <p className="text-xs text-stone-500">
-              Thiết kế các bài viết theo dạng Outline từng chương, từng bài như sách hoặc khóa học
+              Thiết kế các bài viết theo dạng phân cấp từng chương, từng bài như sách hoặc series chuyên đề
             </p>
           </div>
         </div>
@@ -469,7 +469,7 @@ function AdminSeriesContent() {
               className="flex items-center gap-1 text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20"
             >
               <Plus className="w-4 h-4" />
-              <span>Tạo Khóa học mới</span>
+              <span>Tạo Series mới</span>
             </button>
           }
         />
@@ -479,7 +479,7 @@ function AdminSeriesContent() {
       {showNewSeriesModal && (
         <div className="p-6 rounded-3xl border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/30 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-sm text-stone-900 dark:text-white">Tạo Khóa học / Tuyển tập mới</h3>
+            <h3 className="font-bold text-sm text-stone-900 dark:text-white">Tạo Series mới</h3>
             <button
               onClick={() => setShowNewSeriesModal(false)}
               className="text-stone-400 hover:text-stone-600"
@@ -552,7 +552,7 @@ function AdminSeriesContent() {
                   type="button"
                   onClick={() =>
                     setAttributionText(
-                      "Khóa học được biên dịch và tổng hợp từ tài liệu đào tạo chính thức của Anthropic PBC (Claude Certified Architect). Bản quyền nội dung gốc thuộc về Anthropic PBC. Bản dịch tiếng Việt và ghi chú thực hành bởi HungPH Blog."
+                      "Series được biên dịch và tổng hợp từ tài liệu đào tạo chính thức của Anthropic PBC (Claude Certified Architect). Bản quyền nội dung gốc thuộc về Anthropic PBC. Bản dịch tiếng Việt và ghi chú thực hành bởi HungPH Blog."
                     )
                   }
                   className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
@@ -734,7 +734,7 @@ function AdminSeriesContent() {
                   type="button"
                   onClick={() =>
                     setEditAttributionText(
-                      "Khóa học được biên dịch và tổng hợp từ tài liệu đào tạo chính thức của Anthropic PBC (Claude Certified Architect). Bản quyền nội dung gốc thuộc về Anthropic PBC. Bản dịch tiếng Việt và ghi chú thực hành bởi HungPH Blog."
+                      "Series được biên dịch và tổng hợp từ tài liệu đào tạo chính thức của Anthropic PBC (Claude Certified Architect). Bản quyền nội dung gốc thuộc về Anthropic PBC. Bản dịch tiếng Việt và ghi chú thực hành bởi HungPH Blog."
                     )
                   }
                   className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-semibold"
@@ -963,7 +963,7 @@ function AdminSeriesContent() {
         {/* Right: Chi tiết Dàn Outline & Quản lý Chương */}
         <div className="lg:col-span-6 space-y-4">
           <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-            Dàn Outline & Các Chương
+            Dàn bài & Các Chương
           </div>
 
           <div className="relative min-h-[360px]">
@@ -1291,7 +1291,7 @@ function AdminSeriesContent() {
                         })
                       ) : (
                         <div className="text-center py-6 text-xs text-stone-400 italic">
-                          Khóa học này chưa có mục nào trong dàn bài học. Hãy thêm {levels[0]} đầu tiên ở trên!
+                          Series này chưa có mục nào trong dàn bài. Hãy thêm {levels[0]} đầu tiên ở trên!
                         </div>
                       )}
                     </div>

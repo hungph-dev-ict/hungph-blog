@@ -36,6 +36,7 @@ async def init_default_data():
             ("series", "attribution_text", "TEXT"),
             ("chapters", "parent_id", "VARCHAR(36)"),
             ("chapters", "level", "INT DEFAULT 1"),
+            ("posts", "is_spotlight", "BOOLEAN DEFAULT FALSE"),
         ]
         for tbl, col, col_def in migrations:
             try:

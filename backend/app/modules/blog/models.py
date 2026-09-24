@@ -99,6 +99,7 @@ class Post(Base):
     cover_image = Column(String(500), nullable=True)
     
     is_published = Column(Boolean, default=False, index=True)
+    is_spotlight = Column(Boolean, default=False, index=True)  # Admin-configured spotlight headline
     published_at = Column(DateTime(timezone=True), nullable=True)
     reading_time_minutes = Column(Integer, default=1)
     views_count = Column(Integer, default=0)

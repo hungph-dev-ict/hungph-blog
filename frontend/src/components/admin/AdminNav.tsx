@@ -38,7 +38,7 @@ export const AdminNav: React.FC<AdminNavProps> = ({
     },
     {
       key: "series",
-      label: "Khóa học",
+      label: "Series",
       href: "/admin/series",
       icon: GraduationCap,
       adminOnly: true,

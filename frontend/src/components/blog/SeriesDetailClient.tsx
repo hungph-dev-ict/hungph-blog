@@ -277,7 +277,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
     <div className="w-full space-y-6 pb-20">
       <Breadcrumbs
         items={[
-          { label: "Khóa học & Series", href: "/series" },
+          { label: "Series", href: "/series" },
           { label: series.title },
         ]}
       />
@@ -458,7 +458,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
 
               {flatList.length === 0 && (
                 <div className="text-center py-12 px-4 rounded-3xl border border-dashed border-stone-200 dark:border-stone-800 space-y-3">
-                  <p className="text-sm text-stone-500">Khóa học này chưa có nội dung lộ trình nào.</p>
+                  <p className="text-sm text-stone-500">Series này chưa có nội dung lộ trình nào.</p>
                   {canEditOutline && (
                     <button
                       type="button"

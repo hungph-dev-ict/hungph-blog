@@ -1,11 +1,12 @@
 import json
+import logging
 import math
 import re
 from datetime import datetime, timezone
 from typing import List, Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from slugify import slugify
-from sqlalchemy import desc, func, or_, select, update
+from sqlalchemy import desc, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -246,6 +247,31 @@ async def list_posts(
         limit=limit,
         total_pages=total_pages
     )
+
+
+
+@router.get("/posts/spotlight", response_model=Optional[PostListItem])
+async def get_spotlight_post(db: AsyncSession = Depends(get_db)):
+    """Trả về bài viết được Admin đặt làm Spotlight Headline trên trang chủ.
+    Nếu chưa có bài nào được đặt spotlight, trả về None (frontend tự fallback về bài mới nhất).
+    """
+    stmt = (
+        select(Post)
+        .where(Post.is_spotlight == True, Post.is_published == True)
+        .options(
+            selectinload(Post.category),
+            selectinload(Post.tags),
+            selectinload(Post.author),
+            selectinload(Post.series),
+            selectinload(Post.likes),
+        )
+        .limit(1)
+    )
+    res = await db.execute(stmt)
+    post = res.scalar_one_or_none()
+    if not post:
+        return None
+    return PostListItem.model_validate(post)
 
 
 @router.get("/posts/{slug}", response_model=PostDetail)
@@ -623,6 +649,21 @@ async def create_post(
 
     if new_post.is_published:
         await notify_followers_new_post(db, new_post, current_user)
+        try:
+            import asyncio
+            from app.modules.rag.service import update_post_in_index
+            post_dict = {
+                "id": new_post.id,
+                "title": new_post.title,
+                "slug": new_post.slug,
+                "summary": new_post.summary or "",
+                "content_html": new_post.content_html or "",
+                "content_markdown": new_post.content_markdown or "",
+            }
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, update_post_in_index, post_dict)
+        except Exception as rag_err:
+            logger.warning(f"RAG auto-index on create warning: {rag_err}")
 
     # Ghi audit log đăng bài mới
     try:
@@ -739,6 +780,15 @@ async def update_post(
             post.published_at = datetime.now(timezone.utc)
         post.is_published = post_in.is_published
 
+    if post_in.is_spotlight is not None:
+        if post_in.is_spotlight:
+            # Unset any existing spotlight post first (only one at a time)
+            await db.execute(
+                text("UPDATE posts SET is_spotlight = FALSE WHERE is_spotlight = TRUE AND id != :pid"),
+                {"pid": post.id}
+            )
+        post.is_spotlight = post_in.is_spotlight
+
     if post_in.tags is not None:
         post.tags = await get_or_create_tags(db, post_in.tags)
 
@@ -773,6 +823,24 @@ async def update_post(
         )
     except Exception:
         pass
+
+    # RAG Auto-index: cập nhật vector index cho bài viết này
+    if post.is_published:
+        try:
+            import asyncio
+            from app.modules.rag.service import update_post_in_index
+            post_dict = {
+                "id": post.id,
+                "title": post.title,
+                "slug": post.slug,
+                "summary": post.summary or "",
+                "content_html": post.content_html or "",
+                "content_markdown": post.content_markdown or "",
+            }
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, update_post_in_index, post_dict)
+        except Exception as rag_err:
+            logger.warning(f"RAG auto-index warning: {rag_err}")
 
     return PostDetail.model_validate(post)
 

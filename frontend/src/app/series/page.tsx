@@ -21,7 +21,7 @@ export default function SeriesListPage() {
 
   return (
     <div className="w-full space-y-8 pb-16">
-      <Breadcrumbs items={[{ label: "Khóa học & Series" }]} />
+      <Breadcrumbs items={[{ label: "Series" }]} />
 
       {/* Header */}
       <div className="space-y-4 max-w-3xl">
@@ -77,7 +77,7 @@ export default function SeriesListPage() {
                       <GraduationCap className="w-8 h-8 text-white" />
                     </div>
                     <span className="text-xs font-bold uppercase tracking-wider text-blue-100">
-                      Khóa học / Tuyển tập
+                      Series
                     </span>
                   </div>
                 )}

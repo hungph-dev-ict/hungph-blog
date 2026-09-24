@@ -105,6 +105,7 @@ export interface PostListItem {
   summary?: string;
   cover_image?: string;
   is_published: boolean;
+  is_spotlight?: boolean;
   published_at?: string;
   reading_time_minutes: number;
   views_count: number;

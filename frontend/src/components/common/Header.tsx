@@ -14,6 +14,7 @@ import {
   Sun,
   LogOut,
   Flag,
+  Sparkles,
 } from "lucide-react";
 import { GoogleLoginButton } from "./GoogleLoginButton";
 import { getUnreadCount, getNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api";
@@ -125,8 +126,9 @@ export const Header: React.FC = () => {
 
   const navLinks = [
     { href: "/", label: "Bài viết", icon: BookOpen },
-    { href: "/series", label: "Khóa học / Series", icon: GraduationCap, badge: "Outline" },
+    { href: "/series", label: "Series", icon: GraduationCap },
     { href: "/categories", label: "Chủ đề", icon: Compass },
+    { href: "/rag", label: "Trợ lý AI", icon: Sparkles, badge: "AI" },
   ];
 
   const isAdmin = user?.role === "admin" || user?.is_admin;

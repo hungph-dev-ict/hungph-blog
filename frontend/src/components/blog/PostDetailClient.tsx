@@ -216,7 +216,7 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
           items={[
             ...(post.series_outline
               ? [
-                  { label: "Khóa học", href: "/series" },
+                  { label: "Series", href: "/series" },
                   { label: post.series_outline.title, href: `/series/${post.series_outline.slug}` },
                 ]
               : post.category
@@ -263,7 +263,7 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
               </div>
               <div>
                 <div className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                  Khóa học / Tuyển tập
+                  Series
                 </div>
                 <div className="text-sm font-bold text-stone-900 dark:text-white">
                   {post.series_outline.title}

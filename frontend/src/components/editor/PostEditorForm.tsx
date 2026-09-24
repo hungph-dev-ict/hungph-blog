@@ -30,6 +30,7 @@ import {
   Smartphone,
   FileText,
   AlertTriangle,
+  Flame,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useLoading } from "@/lib/loading-context";
@@ -85,6 +86,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   const [categoryId, setCategoryId] = useState("");
   const [tagsInput, setTagsInput] = useState("");
   const [isPublished, setIsPublished] = useState(false);
+  const [isSpotlight, setIsSpotlight] = useState(false);
 
   // Series & Chapter State
   const [seriesList, setSeriesList] = useState<Series[]>([]);
@@ -351,6 +353,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         setCategoryId(data.category?.id || "");
         setTagsInput(data.tags.map((t) => t.name).join(", "));
         setIsPublished(data.is_published);
+        setIsSpotlight(data.is_spotlight ?? false);
         setSavedSlug(data.slug);
         if (data.series_id) setSeriesId(data.series_id);
         if (data.chapter_id) setChapterId(data.chapter_id);
@@ -599,7 +602,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         hierarchyLevels.every((_, idx) => !!selectedLevelIds[idx]);
       if (!isAllSelected || !chapterId) {
         triggerToast(
-          `Khóa học yêu cầu phân cấp ${hierarchyLevels.length} tầng. Vui lòng chọn đầy đủ cấp phân mục (${hierarchyLevels.join(" > ")})!`,
+          `Series yêu cầu phân cấp ${hierarchyLevels.length} tầng. Vui lòng chọn đầy đủ cấp phân mục (${hierarchyLevels.join(" > ")})!`,
           "error"
         );
         return;
@@ -626,6 +629,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
       order_in_chapter: Number(orderInChapter) || 1,
       tags: tagsArray,
       is_published: publishStatus,
+      is_spotlight: isAdmin ? isSpotlight : undefined,
     };
 
     await withLoading(async () => {
@@ -709,7 +713,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
           ...(isCoursePost
             ? [
                 {
-                  label: targetSeriesTitle ? `Khóa học: ${targetSeriesTitle}` : "Khóa học",
+                  label: targetSeriesTitle ? `Series: ${targetSeriesTitle}` : "Series",
                   href: backHref,
                 },
               ]
@@ -751,7 +755,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
                   }`}
                   title={backTitle}
                 >
-                  • <GraduationCap className="w-3 h-3" /> {targetSeriesTitle ? `Khóa học: ${targetSeriesTitle}` : "Thuộc Khóa học"}
+                  • <GraduationCap className="w-3 h-3" /> {targetSeriesTitle ? `Series: ${targetSeriesTitle}` : "Thuộc Series"}
                 </Link>
               )}
             </div>
@@ -880,11 +884,11 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
               <span>Cài đặt bài viết</span>
             </div>
 
-            {/* Thuộc Khóa học / Tuyển tập (Series/Course) */}
+            {/* Thuộc Series */}
             <div className="p-3.5 rounded-xl border border-blue-200/80 dark:border-blue-900/50 bg-blue-50/40 dark:bg-blue-950/20 space-y-2.5">
               <div className="flex items-center gap-1.5 text-xs font-bold text-blue-700 dark:text-blue-400">
                 <GraduationCap className="w-4 h-4" />
-                <span>Khóa học / Tuyển tập (Prep Course)</span>
+                <span>Series</span>
               </div>
               <p className="text-[11px] text-stone-500">
                 Gắn bài này vào một chương cụ thể để người đọc theo dõi theo outline lộ trình.
@@ -895,7 +899,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
                 onChange={(e) => handleSeriesChange(e.target.value)}
                 className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-medium"
               >
-                <option value="">-- Bài viết độc lập (Không thuộc khóa học) --</option>
+                <option value="">-- Bài viết độc lập (Không thuộc series nào) --</option>
                 {seriesList.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.title}
@@ -1162,6 +1166,38 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
                 </div>
               )}
             </div>
+
+            {/* Spotlight Headline (Admin Only) */}
+            {isAdmin && postId && (
+              <div className={`p-3.5 rounded-xl border space-y-1.5 transition-colors ${
+                isSpotlight
+                  ? "border-amber-400/70 dark:border-amber-600/60 bg-amber-50/60 dark:bg-amber-950/30"
+                  : "border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/30"
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                    <Flame className="w-4 h-4" />
+                    <span>Spotlight Headline</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSpotlight(!isSpotlight)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                      isSpotlight ? "bg-amber-500" : "bg-stone-300 dark:bg-stone-600"
+                    }`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                      isSpotlight ? "translate-x-4" : "translate-x-0.5"
+                    }`} />
+                  </button>
+                </div>
+                <p className="text-[11px] text-stone-500">
+                  {isSpotlight
+                    ? "✅ Bài viết này đang được hiển thị nổi bật trên trang chủ."
+                    : "Bật để hiển thị bài viết này làm Spotlight trên trang chủ (chỉ 1 bài tại một thời điểm)."}
+                </p>
+              </div>
+            )}
 
             {/* Slug URL */}
             <div className="space-y-1.5">

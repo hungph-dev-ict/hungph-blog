@@ -65,12 +65,18 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <Link href="/series" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                  Khóa học & Tuyển tập
+                  Series
                 </Link>
               </li>
               <li>
                 <Link href="/categories" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                   Danh mục chủ đề
+                </Link>
+              </li>
+              <li>
+                <Link href="/rag" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors inline-flex items-center gap-1.5">
+                  <span>Trợ lý AI (RAG)</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-medium">Mới</span>
                 </Link>
               </li>
             </ul>

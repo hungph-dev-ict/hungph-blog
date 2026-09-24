@@ -115,7 +115,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 <Link
                   href={`/series/${post.series.slug}`}
                   className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-medium text-[11px] bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors shrink-0"
-                  title={`Khóa học: ${post.series.title}`}
+                  title={`Series: ${post.series.title}`}
                 >
                   <GraduationCap className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
                   <span className="max-w-[140px] sm:max-w-[220px] truncate">

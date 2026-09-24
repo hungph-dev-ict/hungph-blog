@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const series = await fetchSeriesBySlug(slug);
     if (!series) {
       return {
-        title: "Khóa học không tồn tại | HungPH. Blog",
+        title: "Series không tồn tại | HungPH. Blog",
       };
     }
 
@@ -42,15 +42,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
     const description =
       series.summary ||
-      `Khóa học ${series.title} gồm ${series.total_chapters} chương và ${series.total_lessons} bài học chuyên sâu.`;
+      `Series ${series.title} gồm ${series.total_chapters} chương và ${series.total_lessons} bài viết chuyên sâu.`;
 
     return {
-      title: `${series.title} (Khóa Học)`,
+      title: `${series.title} (Series)`,
       description,
       keywords: [
         series.title,
         series.category ? series.category.name : "",
-        "Khóa học lập trình",
         "Series bài viết",
         "Hung Pham Hoang",
       ].filter(Boolean),
@@ -82,7 +81,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   } catch {
     return {
-      title: "Khóa học | HungPH. Blog",
+      title: "Series | HungPH. Blog",
     };
   }
 }
@@ -134,7 +133,7 @@ export default async function SeriesDetailPage({ params }: Props) {
       {
         "@type": "ListItem",
         position: 2,
-        name: "Khóa học & Series",
+        name: "Series",
         item: `${siteUrl}/series`,
       },
       {

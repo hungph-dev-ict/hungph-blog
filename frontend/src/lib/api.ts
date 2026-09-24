@@ -88,6 +88,18 @@ export async function fetchPosts(
   return res.json();
 }
 
+export async function fetchSpotlightPost(): Promise<PostListItem | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/blog/posts/spotlight`, {
+      next: { revalidate: 60 },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchWriteableSeries(token: string): Promise<Series[]> {
   const res = await fetch(`${API_BASE_URL}/blog/series/writeable`, {
     headers: getHeaders(token),
@@ -440,13 +452,46 @@ export async function fetchMyProfile(token: string): Promise<User> {
 }
 
 // --- UTILITIES & RAG ---
-export async function queryRAG(query: string): Promise<{ answer: string; sources: any[] }> {
+export async function getRAGStatus(): Promise<{
+  status: string;
+  gemini_api_configured: boolean;
+  index_exists: boolean;
+  num_vectors: number;
+  embedding_model: string;
+  llm_model: string;
+  description: string;
+}> {
+  const res = await fetch(`${API_BASE_URL}/rag/status`, { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to fetch RAG status");
+  return res.json();
+}
+
+export async function queryRAG(query: string, top_k = 5): Promise<{
+  answer: string;
+  sources: Array<{ title: string; slug: string; similarity_score: number; snippet: string }>;
+  model?: string;
+}> {
   const res = await fetch(`${API_BASE_URL}/rag/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, top_k }),
   });
-  if (!res.ok) throw new Error("RAG service unavailable");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "RAG service unavailable");
+  }
+  return res.json();
+}
+
+export async function triggerRAGIndex(token: string): Promise<{ success: boolean; message: string; num_posts: number }> {
+  const res = await fetch(`${API_BASE_URL}/rag/index`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to trigger RAG indexing");
+  }
   return res.json();
 }
 

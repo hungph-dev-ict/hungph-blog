@@ -66,5 +66,8 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str = os.getenv("CLOUDINARY_API_KEY", "")
     CLOUDINARY_API_SECRET: str = os.getenv("CLOUDINARY_API_SECRET", "")
 
+    # Gemini AI — dùng cho RAG Q&A
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+
 
 settings = Settings()

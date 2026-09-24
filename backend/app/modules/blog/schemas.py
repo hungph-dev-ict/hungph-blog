@@ -187,6 +187,7 @@ class PostUpdate(BaseModel):
     content_markdown: Optional[str] = None
     cover_image: Optional[str] = None
     is_published: Optional[bool] = None
+    is_spotlight: Optional[bool] = None
     category_id: Optional[str] = None
     tags: Optional[List[str]] = None
     series_id: Optional[str] = None
@@ -201,6 +202,7 @@ class PostListItem(BaseModel):
     summary: Optional[str] = None
     cover_image: Optional[str] = None
     is_published: bool
+    is_spotlight: bool = False
     published_at: Optional[datetime] = None
     reading_time_minutes: int
     views_count: int
