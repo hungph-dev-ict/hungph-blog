@@ -112,7 +112,10 @@ export async function fetchPostById(id: string, token: string): Promise<PostDeta
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error(`Failed to fetch post by ID`);
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    const error: any = new Error(err.detail || `Failed to fetch post by ID (${res.status})`);
+    error.status = res.status;
+    throw error;
   }
   return res.json();
 }
@@ -747,4 +750,21 @@ export async function removeCollaborator(seriesId: string, userId: string, token
     throw new Error(err.detail || "Xóa cộng tác viên thất bại");
   }
 }
+
+export async function fetchLinkMetadata(url: string): Promise<{ url: string; title: string; site_name: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/utilities/link-metadata`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) {
+      return { url, title: url, site_name: "" };
+    }
+    return res.json();
+  } catch {
+    return { url, title: url, site_name: "" };
+  }
+}
+
 

@@ -11,6 +11,7 @@ import {
   Settings,
   FolderPlus,
   CheckCircle,
+  AlertCircle,
   ExternalLink,
   GraduationCap,
   Layers,
@@ -23,6 +24,11 @@ import {
   Loader2,
   Plus,
   X,
+  Eye,
+  EyeOff,
+  Monitor,
+  Smartphone,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useLoading } from "@/lib/loading-context";
@@ -96,6 +102,37 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
   const [showNewCatModal, setShowNewCatModal] = useState(false);
   const [newCatName, setNewCatName] = useState("");
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewDeviceMode, setPreviewDeviceMode] = useState<"desktop" | "mobile">("desktop");
+
+  // Toast Notification State
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerToast = (message: string, type: "success" | "error" | "info" = "success") => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  };
+
+  // Tự động đọc và hiển thị toast nếu có từ trang trước (ví dụ chuyển từ /editor/new sang /editor/[id])
+  useEffect(() => {
+    try {
+      const persisted = sessionStorage.getItem("editor_toast");
+      if (persisted) {
+        sessionStorage.removeItem("editor_toast");
+        const parsed = JSON.parse(persisted);
+        if (parsed?.message) {
+          triggerToast(parsed.message, parsed.type || "success");
+        }
+      }
+    } catch {}
+  }, []);
 
   // Inline Chapter Creation state
   const [showAddChapterModal, setShowAddChapterModal] = useState(false);
@@ -188,6 +225,10 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         if (data.series_outline) setPostSeriesDetail(data.series_outline);
       })
       .catch((err) => {
+        if (err.message?.includes("403") || err.message?.includes("quyền") || err.status === 403) {
+          setIsUnauthorized(true);
+          return;
+        }
         alert(`Không thể tải bài viết: ${err.message}`);
         const qSeries = searchParams?.get("series_id");
         const qSlug = searchParams?.get("series_slug");
@@ -305,8 +346,9 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
       try {
         const res = await uploadMedia(file, token);
         setCoverImage(res.url);
+        triggerToast("Đã tải ảnh bìa lên thành công!", "success");
       } catch (err: any) {
-        alert(`Lỗi upload ảnh cover: ${err.message}`);
+        triggerToast(`Lỗi upload ảnh cover: ${err.message}`, "error");
       }
     }, "Đang tải ảnh bìa lên...");
   };
@@ -320,8 +362,9 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         setCategoryId(newCat.id);
         setNewCatName("");
         setShowNewCatModal(false);
+        triggerToast(`Đã tạo chuyên mục "${newCat.name}" thành công!`, "success");
       } catch (err: any) {
-        alert(`Lỗi tạo danh mục: ${err.message}`);
+        triggerToast(`Lỗi tạo danh mục: ${err.message}`, "error");
       }
     }, "Đang tạo chuyên mục mới...");
   };
@@ -395,11 +438,11 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
 
   const handleSubmit = async (publishStatus: boolean) => {
     if (!title.trim()) {
-      alert("Vui lòng nhập tiêu đề bài viết!");
+      triggerToast("Vui lòng nhập tiêu đề bài viết!", "error");
       return;
     }
     if (!token) {
-      alert("Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.");
+      triggerToast("Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.", "error");
       router.push("/login");
       return;
     }
@@ -409,8 +452,9 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         hierarchyLevels.length > 0 &&
         hierarchyLevels.every((_, idx) => !!selectedLevelIds[idx]);
       if (!isAllSelected || !chapterId) {
-        alert(
-          `Khóa học này yêu cầu phân cấp ${hierarchyLevels.length} tầng. Vui lòng chọn đầy đủ cả ${hierarchyLevels.length} cấp phân mục (${hierarchyLevels.join(" > ")}) trước khi lưu bài viết!`
+        triggerToast(
+          `Khóa học yêu cầu phân cấp ${hierarchyLevels.length} tầng. Vui lòng chọn đầy đủ cấp phân mục (${hierarchyLevels.join(" > ")})!`,
+          "error"
         );
         return;
       }
@@ -449,20 +493,26 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
 
         setSavedSlug(savedPost.slug);
         setIsPublished(savedPost.is_published);
-        alert(
-          publishStatus
-            ? "🎉 Bài viết đã được xuất bản thành công!"
-            : "Đã lưu bài viết vào bản nháp!"
-        );
+
+        const successMessage = publishStatus
+          ? (isPublished ? "🎉 Bài viết đã được cập nhật thành công!" : "🎉 Bài viết đã được xuất bản công khai thành công!")
+          : (isPublished ? "Đã chuyển bài viết về bản nháp riêng tư." : "Đã lưu bản nháp thành công!");
+
         if (!postId) {
+          sessionStorage.setItem(
+            "editor_toast",
+            JSON.stringify({ message: successMessage, type: "success" })
+          );
           const queryParams = new URLSearchParams();
           if (seriesId) queryParams.set("series_id", seriesId);
           if (targetSeriesSlug) queryParams.set("series_slug", targetSeriesSlug);
           const qs = queryParams.toString() ? `?${queryParams.toString()}` : "";
           router.push(`/editor/${savedPost.id}${qs}`);
+        } else {
+          triggerToast(successMessage, "success");
         }
       } catch (err: any) {
-        alert(`Lỗi khi lưu bài viết: ${err.message}`);
+        triggerToast(`Lỗi khi lưu bài viết: ${err.message}`, "error");
       } finally {
         setLoading(false);
         setActionType(null);
@@ -549,7 +599,19 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Nút Xem Trước (Preview Modal) */}
+          <button
+            type="button"
+            onClick={() => setShowPreviewModal(true)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shadow-xs"
+            title="Xem trước bài viết thực tế"
+          >
+            <Eye className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Xem trước</span>
+          </button>
+
+          {/* Xem bài viết thực tế (nếu đã từng xuất bản) */}
           {savedSlug && isPublished && (
             <Link
               href={`/posts/${savedSlug}`}
@@ -559,24 +621,48 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
               }`}
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              <span>Xem bài viết</span>
+              <span>Xem trực tiếp</span>
             </Link>
           )}
 
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => handleSubmit(false)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading && actionType === "draft" ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-500" />
-            ) : (
-              <Save className="w-3.5 h-3.5" />
-            )}
-            <span>{loading && actionType === "draft" ? "Đang lưu..." : "Lưu nháp"}</span>
-          </button>
+          {/* Nếu bài đang ĐÃ XUẤT BẢN => Cho phép chuyển về Bản Nháp (Unpublish) */}
+          {isPublished ? (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                if (window.confirm("Bạn có chắc chắn muốn chuyển bài viết này từ Đã xuất bản về Bản nháp không? (Người đọc thông thường sẽ không còn thấy bài viết này nữa)")) {
+                  handleSubmit(false);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors disabled:opacity-50"
+              title="Chuyển bài viết về trạng thái bản nháp"
+            >
+              {loading && actionType === "draft" ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <EyeOff className="w-3.5 h-3.5 text-amber-600" />
+              )}
+              <span>{loading && actionType === "draft" ? "Đang lưu..." : "Chuyển về bản nháp"}</span>
+            </button>
+          ) : (
+            /* Nếu bài đang là Bản Nháp => Nút Lưu nháp thông thường */
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleSubmit(false)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {loading && actionType === "draft" ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-500" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              <span>{loading && actionType === "draft" ? "Đang lưu..." : "Lưu nháp"}</span>
+            </button>
+          )}
 
+          {/* Nút Xuất bản ngay / Cập nhật xuất bản */}
           <button
             type="button"
             disabled={loading}
@@ -1340,6 +1426,312 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
           </div>
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* MODAL XEM TRƯỚC BÀI VIẾT (PREVIEW MODAL)                 */}
+      {/* ========================================================= */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex flex-col justify-between animate-in fade-in duration-200">
+          {/* Top Bar điều khiển Xem trước */}
+          <div className="bg-stone-900 border-b border-stone-800 px-4 py-3 flex items-center justify-between text-white shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400">
+                <Eye className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-stone-300 flex items-center gap-2">
+                  <span>Chế độ xem trước (Preview)</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                    isPublished ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                  }`}>
+                    {isPublished ? "Đang xuất bản" : "Bản nháp"}
+                  </span>
+                </div>
+                <div className="text-[11px] text-stone-400 truncate max-w-xs sm:max-w-md">
+                  {title || "Chưa đặt tiêu đề"}
+                </div>
+              </div>
+            </div>
+
+            {/* Switch chế độ Desktop / Mobile */}
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center bg-stone-800 p-1 rounded-xl border border-stone-700">
+                <button
+                  type="button"
+                  onClick={() => setPreviewDeviceMode("desktop")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    previewDeviceMode === "desktop"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-stone-400 hover:text-white"
+                  }`}
+                  title="Xem trên màn hình máy tính (Desktop)"
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span>Desktop</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDeviceMode("mobile")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    previewDeviceMode === "mobile"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-stone-400 hover:text-white"
+                  }`}
+                  title="Xem trên màn hình điện thoại (Mobile)"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Mobile</span>
+                </button>
+              </div>
+
+              {/* Nút đóng */}
+              <button
+                type="button"
+                onClick={() => setShowPreviewModal(false)}
+                className="p-1.5 rounded-xl text-stone-400 hover:text-white hover:bg-stone-800 transition-colors"
+                title="Đóng xem trước"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Vùng cuộn xem trước nội dung */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6 flex justify-center bg-stone-950/50">
+            <div
+              className={`bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-2xl transition-all duration-200 overflow-hidden flex flex-col ${
+                previewDeviceMode === "mobile"
+                  ? "w-full max-w-[420px] min-h-[600px] my-auto"
+                  : "w-full max-w-4xl"
+              }`}
+            >
+              {/* Header giả lập trình duyệt trên mobile */}
+              {previewDeviceMode === "mobile" && (
+                <div className="bg-stone-100 dark:bg-stone-800/80 px-4 py-2 border-b border-stone-200 dark:border-stone-700/60 flex items-center justify-between text-[11px] text-stone-500">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <span className="w-2 h-2 rounded-full bg-stone-300 dark:bg-stone-600" />
+                    <span>hungph-blog.com</span>
+                  </div>
+                  <span>9:41 AM</span>
+                </div>
+              )}
+
+              {/* Bài viết hiển thị như trang thật */}
+              <div className="p-4 sm:p-8 md:p-10 space-y-6 sm:space-y-8 flex-1">
+                {/* Giả lập breadcrumbs & categories */}
+                <div className="flex items-center gap-2 flex-wrap text-xs text-stone-500">
+                  <span>Trang chủ</span>
+                  <span>/</span>
+                  {selectedSeries?.title ? (
+                    <>
+                      <span className="text-blue-600 dark:text-blue-400 font-medium">
+                        {selectedSeries.title}
+                      </span>
+                      <span>/</span>
+                    </>
+                  ) : categoryId ? (
+                    <>
+                      <span className="text-blue-600 dark:text-blue-400 font-medium">
+                        {categories.find((c) => c.id === categoryId)?.name || "Chuyên mục"}
+                      </span>
+                      <span>/</span>
+                    </>
+                  ) : null}
+                  <span className="text-stone-400 truncate max-w-[200px]">
+                    {title || "Bài viết mới"}
+                  </span>
+                </div>
+
+                {/* Tiêu đề bài viết */}
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-stone-900 dark:text-stone-100 tracking-tight leading-tight">
+                  {title || (
+                    <span className="text-stone-400 italic font-normal">
+                      (Chưa nhập tiêu đề bài viết)
+                    </span>
+                  )}
+                </h1>
+
+                {/* Tóm tắt bài viết */}
+                {summary && (
+                  <p className="text-base sm:text-lg text-stone-600 dark:text-stone-300 leading-relaxed italic border-l-2 border-blue-500 pl-4 py-0.5">
+                    {summary}
+                  </p>
+                )}
+
+                {/* Tác giả & Ngày đăng */}
+                <div className="flex items-center justify-between pt-2 border-t border-b border-stone-100 dark:border-stone-800/80 py-3">
+                  <div className="flex items-center gap-3">
+                    {user?.avatar_url ? (
+                      <img
+                        src={getFullImageUrl(user.avatar_url)}
+                        alt={user.full_name || user.username || "Tác giả"}
+                        className="w-10 h-10 rounded-full object-cover shadow"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow">
+                        {user?.full_name?.charAt(0) || user?.username?.charAt(0) || "U"}
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                        {user?.full_name || user?.username || "Tác giả"}
+                      </div>
+                      <div className="text-xs text-stone-500">
+                        Hôm nay • {isPublished ? "Đã công khai" : "Bản nháp xem trước"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-medium border border-blue-200/60 dark:border-blue-900/40">
+                      Bản xem trước
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ảnh bìa */}
+                {coverImage && (
+                  <div className="rounded-2xl sm:rounded-3xl overflow-hidden shadow-md border border-stone-200 dark:border-stone-800 max-h-[460px]">
+                    <img
+                      src={getFullImageUrl(coverImage)}
+                      alt={title || "Ảnh bìa"}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+
+                {/* Nội dung bài viết */}
+                <div className="pt-2">
+                  {contentHtml && contentHtml !== "<p></p>" ? (
+                    <div
+                      className="blog-content leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: contentHtml }}
+                    />
+                  ) : (
+                    <div className="py-12 text-center text-stone-400 dark:text-stone-500 italic border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl">
+                      (Nội dung bài viết đang trống. Hãy soạn thảo thêm nội dung trong trình soạn thảo.)
+                    </div>
+                  )}
+                </div>
+
+                {/* Tags */}
+                {tagsInput && (
+                  <div className="pt-6 border-t border-stone-100 dark:border-stone-800/80 flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-stone-500">Thẻ:</span>
+                    {tagsInput
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean)
+                      .map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs font-medium"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Bar của Preview Modal */}
+          <div className="bg-stone-900 border-t border-stone-800 px-4 py-3 flex items-center justify-between text-white shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowPreviewModal(false)}
+              className="px-4 py-2 rounded-xl border border-stone-700 text-xs font-semibold text-stone-300 hover:text-white hover:bg-stone-800 transition-colors"
+            >
+              Tiếp tục soạn thảo
+            </button>
+
+            <div className="flex items-center gap-2">
+              {isPublished ? (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setShowPreviewModal(false);
+                    if (window.confirm("Bạn có chắc muốn chuyển bài viết về Bản nháp?")) {
+                      handleSubmit(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-amber-600 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-semibold transition-colors disabled:opacity-50"
+                >
+                  <EyeOff className="w-3.5 h-3.5" />
+                  <span>Chuyển về bản nháp</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setShowPreviewModal(false);
+                    handleSubmit(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-stone-700 bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-semibold transition-colors disabled:opacity-50"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Lưu nháp</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  handleSubmit(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all disabled:opacity-50"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{isPublished ? "Cập nhật bài viết" : "Xuất bản ngay"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TOAST NOTIFICATION NHẸ NHÀNG (KHÔNG DÙNG ALERT)           */}
+      {/* ========================================================= */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed top-20 right-4 sm:right-8 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-top-3 max-w-md bg-stone-900/95 dark:bg-stone-900/95 text-white border-stone-800"
+        >
+          {toast.type === "success" && (
+            <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0">
+              <CheckCircle className="w-5 h-5" />
+            </div>
+          )}
+          {toast.type === "error" && (
+            <div className="p-1 rounded-lg bg-rose-500/20 text-rose-400 shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+          )}
+          {toast.type === "info" && (
+            <div className="p-1 rounded-lg bg-blue-500/20 text-blue-400 shrink-0">
+              <CheckCircle className="w-5 h-5" />
+            </div>
+          )}
+          <div className="text-xs sm:text-sm font-medium leading-relaxed flex-1">
+            {toast.message}
+          </div>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="p-1 text-stone-400 hover:text-white rounded-lg hover:bg-stone-800 transition-colors shrink-0"
+            title="Đóng thông báo"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
+

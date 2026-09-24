@@ -28,7 +28,7 @@ import {
   Trash2,
   Plus,
 } from "lucide-react";
-import { uploadMedia, getFullImageUrl } from "@/lib/api";
+import { uploadMedia, getFullImageUrl, fetchLinkMetadata } from "@/lib/api";
 
 interface TipTapEditorProps {
   content: string;
@@ -92,6 +92,76 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         class:
           "prose dark:prose-invert max-w-none focus:outline-none min-h-[420px] p-6 text-stone-900 dark:text-stone-100",
       },
+      handlePaste: (view, event) => {
+        const text = event.clipboardData?.getData("text/plain")?.trim();
+        // Kiểm tra xem dữ liệu dán vào có phải là 1 URL duy nhất không
+        if (text && /^https?:\/\/[^\s]+$/i.test(text)) {
+          event.preventDefault();
+          const { state, dispatch } = view;
+          const { from, to } = state.selection;
+
+          // Nếu người dùng đang bôi đen một đoạn chữ, chỉ gán link vào đoạn chữ đó
+          if (from !== to) {
+            const tr = state.tr.addMark(
+              from,
+              to,
+              state.schema.marks.link.create({ href: text })
+            );
+            dispatch(tr);
+            return true;
+          }
+
+          // Trường hợp dán link trống vào vị trí con trỏ:
+          // 1. Chèn tạm thời với hiển thị "🔗 Đang tải thông tin link..."
+          const placeholder = `🔗 Đang tải thông tin liên kết...`;
+          const tr = state.tr.insertText(placeholder, from, to);
+          const linkMark = state.schema.marks.link.create({ href: text });
+          tr.addMark(from, from + placeholder.length, linkMark);
+          dispatch(tr);
+
+          // 2. Fetch metadata từ backend API
+          fetchLinkMetadata(text).then((meta) => {
+            const newTitle = meta.title && meta.title !== text ? meta.title : text;
+            const currentDoc = view.state.doc;
+            let replaced = false;
+
+            currentDoc.descendants((node, pos) => {
+              if (replaced) return false;
+              if (node.isText && node.text?.includes(placeholder)) {
+                const subStart = pos + node.text.indexOf(placeholder);
+                const subEnd = subStart + placeholder.length;
+                const updateTr = view.state.tr.replaceWith(
+                  subStart,
+                  subEnd,
+                  view.state.schema.text(newTitle, [linkMark])
+                );
+                view.dispatch(updateTr);
+                replaced = true;
+                return false;
+              }
+            });
+          }).catch(() => {
+            // Nếu lỗi, fallback về chính URL
+            const currentDoc = view.state.doc;
+            currentDoc.descendants((node, pos) => {
+              if (node.isText && node.text?.includes(placeholder)) {
+                const subStart = pos + node.text.indexOf(placeholder);
+                const subEnd = subStart + placeholder.length;
+                const updateTr = view.state.tr.replaceWith(
+                  subStart,
+                  subEnd,
+                  view.state.schema.text(text, [linkMark])
+                );
+                view.dispatch(updateTr);
+                return false;
+              }
+            });
+          });
+
+          return true;
+        }
+        return false;
+      },
     },
     immediatelyRender: false,
   });
@@ -151,8 +221,8 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         className="hidden"
       />
 
-      {/* Editor Toolbar - Fixed cleanly at top of editor card */}
-      <div className="relative flex flex-wrap items-center gap-1 p-2.5 border-b border-stone-200 dark:border-stone-800 bg-stone-50/90 dark:bg-stone-900/90 rounded-t-2xl z-20 backdrop-blur-sm">
+      {/* Editor Toolbar - Sticky: luôn hiển thị ngay dưới top action bar khi scroll, khít mép viền trên */}
+      <div className="sticky top-[145px] sm:top-[137px] -mt-[1px] -mx-[1px] flex flex-wrap items-center gap-1 p-2.5 border-t border-x sm:border-t-0 border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 rounded-t-2xl z-20 shadow-xs">
         {/* Headings */}
         <button
           type="button"

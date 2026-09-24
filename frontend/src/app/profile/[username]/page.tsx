@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useLoading } from "@/lib/loading-context";
 import { getUserProfile, getFollowStatus, toggleFollow, fetchPosts } from "@/lib/api";
 import { UserProfile, FollowStatus, PostListItem } from "@/lib/types";
-import { Users, UserCheck, Calendar, BookOpen, Plus, FileText, ArrowLeft } from "lucide-react";
+import { Users, UserCheck, Calendar, BookOpen, Plus, FileText, ArrowLeft, Code2, Sparkles, Terminal, Cpu } from "lucide-react";
 import { PostCard } from "@/components/blog/PostCard";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { LoadingOverlay } from "@/components/common/LoadingOverlay";
@@ -117,8 +117,87 @@ export default function ProfilePage() {
 
       {/* Profile Header Card */}
       <div className="rounded-3xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900/80 shadow-sm overflow-hidden">
-        {/* Banner with subtle ambient gradient */}
-        <div className="h-32 sm:h-40 bg-gradient-to-r from-blue-600/20 via-purple-600/15 to-indigo-600/25 relative" />
+        {/* Banner with distinctive Tech & Architecture soul */}
+        {(() => {
+          // Sinh màu nền gradient và sắc thái độc bản theo username để mỗi tác giả có một cá tính riêng nhưng cùng phong cách
+          const hash = profile.username.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+          const themes = [
+            {
+              from: "from-blue-600 via-indigo-600 to-violet-800",
+              accent: "text-blue-400",
+              tag: "Architect & Systems",
+              codeSnippet: "const arch = new SystemArchitecture({ cache: 'Redis', ai: 'RAG' });",
+            },
+            {
+              from: "from-cyan-600 via-blue-700 to-indigo-900",
+              accent: "text-cyan-300",
+              tag: "Fullstack & Cloud",
+              codeSnippet: "export default async function renderCore() => await cloudEngine();",
+            },
+            {
+              from: "from-violet-600 via-purple-700 to-slate-900",
+              accent: "text-purple-300",
+              tag: "AI & Vector Search",
+              codeSnippet: "vectorStore.similaritySearch(query, topK=5); // RAG pipeline",
+            },
+            {
+              from: "from-emerald-600 via-teal-700 to-cyan-950",
+              accent: "text-emerald-300",
+              tag: "Engineering & Data",
+              codeSnippet: "SELECT author, COUNT(*) FROM posts GROUP BY author HAVING views > 1000;",
+            },
+          ];
+          const selectedTheme = themes[hash % themes.length];
+
+          return (
+            <div className={`h-40 sm:h-52 bg-gradient-to-r ${selectedTheme.from} relative overflow-hidden select-none`}>
+              {/* Tech Grid & Dotted Circuit Pattern */}
+              <div
+                className="absolute inset-0 opacity-15 dark:opacity-25"
+                style={{
+                  backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.7) 1px, transparent 0)`,
+                  backgroundSize: "20px 20px",
+                }}
+              />
+
+              {/* Glowing ambient orbs */}
+              <div className="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+              <div className="absolute -bottom-8 left-1/3 w-48 h-48 rounded-full bg-black/20 blur-xl pointer-events-none" />
+
+              {/* Subtle Tech Circuit / Wireframe Vector Lines */}
+              <svg
+                className="absolute inset-0 w-full h-full opacity-20 pointer-events-none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <line x1="0" y1="30%" x2="100%" y2="30%" stroke="white" strokeWidth="0.5" strokeDasharray="6 6" />
+                <line x1="0" y1="75%" x2="100%" y2="75%" stroke="white" strokeWidth="0.5" strokeDasharray="10 10" />
+                <circle cx="85%" cy="30%" r="4" fill="white" />
+                <circle cx="20%" cy="75%" r="3" fill="white" />
+              </svg>
+
+              {/* Floating Code Snippet & Soul Badge (Visible on sm/md/lg screens) */}
+              <div className="absolute right-4 sm:right-8 top-4 flex flex-col items-end gap-2 text-right">
+                <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/30 backdrop-blur-md border border-white/15 text-[11px] font-semibold text-white/90 shadow-sm">
+                  <Sparkles className="w-3 h-3 text-amber-300" />
+                  <span>HungPH. Blog • {selectedTheme.tag}</span>
+                </div>
+
+                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/40 backdrop-blur-md border border-white/10 text-[10px] font-mono text-white/80 shadow-inner">
+                  <Terminal className="w-3 h-3 text-emerald-400 shrink-0" />
+                  <span className="truncate max-w-[280px] text-stone-200">
+                    {selectedTheme.codeSnippet}
+                  </span>
+                </div>
+              </div>
+
+              {/* Bottom Decorative Watermark Signature */}
+              <div className="absolute left-6 sm:left-40 bottom-3 hidden sm:flex items-center gap-2 text-white/40 text-[10px] uppercase font-bold tracking-widest pointer-events-none">
+                <Code2 className="w-3.5 h-3.5" />
+                <span>Knowledge Sharing &amp; Architecture Discovery</span>
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="px-6 sm:px-8 pb-8 pt-0 relative">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-14 sm:-mt-16 mb-6">

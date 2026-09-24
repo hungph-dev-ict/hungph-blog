@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { List } from "lucide-react";
+import { List, ChevronDown, ChevronUp } from "lucide-react";
 
 interface TOCItem {
   id: string;
@@ -11,11 +11,20 @@ interface TOCItem {
 
 interface TableOfContentsProps {
   contentHtml: string;
+  initialCollapsed?: boolean;
+  onHeadingsFound?: (count: number) => void;
+  className?: string;
 }
 
-export const TableOfContents: React.FC<TableOfContentsProps> = ({ contentHtml }) => {
+export const TableOfContents: React.FC<TableOfContentsProps> = ({
+  contentHtml,
+  initialCollapsed = false,
+  onHeadingsFound,
+  className = "",
+}) => {
   const [headings, setHeadings] = useState<TOCItem[]>([]);
   const [activeId, setActiveId] = useState<string>("");
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(initialCollapsed);
 
   useEffect(() => {
     // Parse H2 and H3 from the article content
@@ -25,7 +34,8 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({ contentHtml })
 
     const items: TOCItem[] = [];
     elements.forEach((el, index) => {
-      const text = el.textContent || "";
+      const text = (el.textContent || "").trim();
+      if (!text) return;
       let id = el.id;
       if (!id) {
         id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
@@ -38,6 +48,9 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({ contentHtml })
     });
 
     setHeadings(items);
+    if (onHeadingsFound) {
+      onHeadingsFound(items.length);
+    }
 
     // Add corresponding IDs to actual rendered DOM elements
     const article = document.querySelector(".blog-content");
@@ -66,36 +79,59 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({ contentHtml })
     headingNodes.forEach((node) => observer.observe(node));
 
     return () => observer.disconnect();
-  }, [contentHtml]);
+  }, [contentHtml, onHeadingsFound]);
 
   if (headings.length === 0) return null;
 
   return (
-    <div className="p-4 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white/60 dark:bg-stone-900/60 backdrop-blur-sm sticky top-24">
-      <div className="flex items-center gap-2 font-semibold text-xs tracking-wider uppercase text-stone-500 dark:text-stone-400 mb-3">
-        <List className="w-3.5 h-3.5 text-blue-500" />
-        <span>Mục lục bài viết</span>
-      </div>
-      <nav className="space-y-1 text-sm max-h-[70vh] overflow-y-auto pr-2">
-        {headings.map((item) => {
-          const isActive = activeId === item.id;
-          return (
-            <a
-              key={item.id}
-              href={`#${item.id}`}
-              className={`block py-1 transition-colors leading-snug ${
-                item.level === 3 ? "pl-4 text-xs" : "font-medium"
-              } ${
-                isActive
-                  ? "text-blue-600 dark:text-blue-400 font-semibold"
-                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200"
-              }`}
-            >
-              {item.text}
-            </a>
-          );
-        })}
-      </nav>
+    <div
+      className={`p-4 rounded-2xl border border-stone-200/90 dark:border-stone-800 bg-white/80 dark:bg-stone-900/70 backdrop-blur-sm shadow-sm transition-all ${className}`}
+    >
+      <button
+        type="button"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="w-full flex items-center justify-between font-semibold text-xs tracking-wider uppercase text-stone-600 dark:text-stone-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group cursor-pointer"
+        title={isCollapsed ? "Mở rộng mục lục" : "Thu gọn mục lục"}
+      >
+        <div className="flex items-center gap-2">
+          <List className="w-3.5 h-3.5 text-blue-500" />
+          <span>Mục lục bài viết</span>
+          <span className="text-[10px] lowercase tracking-normal text-stone-400 font-normal">
+            ({headings.length} mục)
+          </span>
+        </div>
+        <div className="p-1 rounded-md group-hover:bg-stone-100 dark:group-hover:bg-stone-800 transition-colors">
+          {isCollapsed ? (
+            <ChevronDown className="w-4 h-4 text-stone-400" />
+          ) : (
+            <ChevronUp className="w-4 h-4 text-stone-400" />
+          )}
+        </div>
+      </button>
+
+      {!isCollapsed && (
+        <nav className="mt-3 pt-3 border-t border-stone-100 dark:border-stone-800 space-y-1 text-sm max-h-[60vh] overflow-y-auto pr-2 animate-in fade-in duration-150">
+          {headings.map((item) => {
+            const isActive = activeId === item.id;
+            return (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                className={`block py-1 transition-colors leading-snug ${
+                  item.level === 3 ? "pl-4 text-xs" : "font-medium text-xs sm:text-sm"
+                } ${
+                  isActive
+                    ? "text-blue-600 dark:text-blue-400 font-bold"
+                    : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200"
+                }`}
+              >
+                {item.text}
+              </a>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 };
+
