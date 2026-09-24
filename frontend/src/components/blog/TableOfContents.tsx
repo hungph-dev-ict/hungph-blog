@@ -81,6 +81,48 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
     return () => observer.disconnect();
   }, [contentHtml, onHeadingsFound]);
 
+  // Cuộn mượt mà tới mục tiêu bằng Javascript, tuyệt đối không reload trang
+  const handleScrollTo = (e: React.MouseEvent, id: string, text: string) => {
+    e.preventDefault();
+
+    // 1. Tìm element theo ID
+    let targetElement = document.getElementById(id);
+
+    // 2. Fallback nếu element chưa được gắn ID kịp thời
+    if (!targetElement) {
+      const article = document.querySelector(".blog-content");
+      if (article) {
+        const headings = article.querySelectorAll("h2, h3");
+        for (const h of headings) {
+          if ((h.textContent || "").trim() === text.trim()) {
+            h.id = id;
+            targetElement = h as HTMLElement;
+            break;
+          }
+        }
+      }
+    }
+
+    if (targetElement) {
+      // Bù trừ độ cao của Sticky Header / Top Navbar (khoảng 85px)
+      const topOffset = 85;
+      const elementPosition = targetElement.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - topOffset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth",
+      });
+
+      setActiveId(id);
+
+      // Cập nhật hash trên URL mà không reload trang
+      try {
+        window.history.pushState(null, "", `#${id}`);
+      } catch {}
+    }
+  };
+
   if (headings.length === 0) return null;
 
   return (
@@ -117,7 +159,8 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
               <a
                 key={item.id}
                 href={`#${item.id}`}
-                className={`block py-1 transition-colors leading-snug ${
+                onClick={(e) => handleScrollTo(e, item.id, item.text)}
+                className={`block py-1 transition-colors leading-snug cursor-pointer ${
                   item.level === 3 ? "pl-4 text-xs" : "font-medium text-xs sm:text-sm"
                 } ${
                   isActive
