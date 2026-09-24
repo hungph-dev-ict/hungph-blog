@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useLoading } from "@/lib/loading-context";
-import { getUserProfile, getFollowStatus, toggleFollow, fetchPosts } from "@/lib/api";
+import { getUserProfile, getFollowStatus, toggleFollow, fetchPosts, updateMyProfile } from "@/lib/api";
 import { UserProfile, FollowStatus, PostListItem } from "@/lib/types";
-import { Users, UserCheck, Calendar, BookOpen, Plus, FileText, ArrowLeft, Code2, Sparkles, Terminal, Cpu } from "lucide-react";
+import { Users, UserCheck, Calendar, BookOpen, Plus, FileText, ArrowLeft, Code2, Sparkles, Terminal, Cpu, Edit3 } from "lucide-react";
 import { PostCard } from "@/components/blog/PostCard";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { LoadingOverlay } from "@/components/common/LoadingOverlay";
@@ -21,6 +21,23 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isEditingBio, setIsEditingBio] = useState(false);
+  const [bioInput, setBioInput] = useState("");
+  const [savingBio, setSavingBio] = useState(false);
+
+  const handleSaveBio = async () => {
+    if (!token) return;
+    setSavingBio(true);
+    try {
+      const updated = await updateMyProfile({ bio: bioInput.trim() }, token);
+      setProfile((prev) => (prev ? { ...prev, bio: updated.bio || "" } : null));
+      setIsEditingBio(false);
+    } catch (err: any) {
+      alert(err.message || "Lỗi lưu tiểu sử");
+    } finally {
+      setSavingBio(false);
+    }
+  };
 
   useEffect(() => {
     if (!username) return;
@@ -278,6 +295,67 @@ export default function ProfilePage() {
                 @{profile.username}
               </p>
             </div>
+
+            {/* Bio Section */}
+            {isEditingBio ? (
+              <div className="space-y-2 pt-1 max-w-xl">
+                <textarea
+                  value={bioInput}
+                  onChange={(e) => setBioInput(e.target.value)}
+                  placeholder="Viết một đoạn ngắn giới thiệu về bạn (ví dụ: Kỹ sư phần mềm, đam mê công nghệ...)"
+                  maxLength={500}
+                  rows={3}
+                  className="w-full text-xs sm:text-sm p-3 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+                <div className="flex items-center justify-between text-xs text-stone-400">
+                  <span>{bioInput.length}/500 ký tự</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={savingBio}
+                      onClick={() => setIsEditingBio(false)}
+                      className="px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 font-medium"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="button"
+                      disabled={savingBio}
+                      onClick={handleSaveBio}
+                      className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors disabled:opacity-50"
+                    >
+                      {savingBio ? "Đang lưu..." : "Lưu tiểu sử"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="pt-0.5 max-w-2xl">
+                {profile.bio ? (
+                  <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed italic">
+                    "{profile.bio}"
+                  </p>
+                ) : isOwnProfile ? (
+                  <p className="text-xs text-stone-400 dark:text-stone-500 italic">
+                    Bạn chưa có tiểu sử (bio). Hãy thêm tiểu sử để độc giả hiểu rõ hơn về bạn!
+                  </p>
+                ) : null}
+
+                {isOwnProfile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBioInput(profile.bio || "");
+                      setIsEditingBio(true);
+                    }}
+                    className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1.5 font-medium"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>{profile.bio ? "Chỉnh sửa tiểu sử" : "Thêm tiểu sử"}</span>
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Stats Bar */}
             <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs sm:text-sm text-stone-600 dark:text-stone-400 pt-2 border-t border-stone-100 dark:border-stone-800/80">

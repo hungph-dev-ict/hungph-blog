@@ -8,10 +8,17 @@ class UserBase(BaseModel):
     username: str
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    bio: Optional[str] = None
 
 
 class UserCreate(UserBase):
     password: str
+
+
+class UserProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
 
 
 class UserLogin(BaseModel):

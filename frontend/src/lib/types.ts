@@ -4,6 +4,7 @@ export interface User {
   username: string;
   full_name?: string;
   avatar_url?: string;
+  bio?: string;
   role?: string;
   is_admin: boolean;
   is_active?: boolean;
@@ -42,6 +43,8 @@ export interface AuthorBrief {
   username: string;
   full_name?: string;
   avatar_url?: string;
+  bio?: string;
+  created_at?: string;
 }
 
 export interface LessonBrief {
@@ -151,6 +154,7 @@ export interface UserBrief {
   username: string;
   full_name?: string;
   avatar_url?: string;
+  bio?: string;
 }
 
 export interface UserProfile extends UserBrief {

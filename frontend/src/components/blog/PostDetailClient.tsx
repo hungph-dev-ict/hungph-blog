@@ -333,9 +333,20 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
               )}
               <div>
                 <div className="text-sm font-semibold text-stone-900 dark:text-stone-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1.5">
-                  <span>{post.author?.full_name || post.author?.username || "Hung Pham Hoang"}</span>
+                  <span>{post.author?.full_name || post.author?.username || "Tác giả"}</span>
                 </div>
-                <div className="text-xs text-stone-500">Tác giả & Kỹ sư phần mềm • <span className="text-blue-500 font-medium">Xem hồ sơ</span></div>
+                <div className="text-xs text-stone-500">
+                  {post.author?.bio?.trim()
+                    ? (post.author.bio.length > 55 ? `${post.author.bio.slice(0, 55)}...` : post.author.bio)
+                    : `Gia nhập từ ${
+                        post.author?.created_at
+                          ? new Date(post.author.created_at).toLocaleDateString("vi-VN", {
+                              month: "2-digit",
+                              year: "numeric",
+                            })
+                          : "2026"
+                      }`} • <span className="text-blue-500 font-medium">Xem hồ sơ</span>
+                </div>
               </div>
             </Link>
 
@@ -891,15 +902,53 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
 
                 {/* Author Bio Box */}
                 <div className="mt-10 p-6 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-100/50 dark:bg-stone-900/40 flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
-                    {post.author?.full_name?.charAt(0) || post.author?.username?.charAt(0) || "H"}
-                  </div>
+                  <Link
+                    href={post.author?.username ? `/profile/${post.author.username}` : "#"}
+                    className="shrink-0 group"
+                    title="Xem trang cá nhân"
+                  >
+                    {post.author?.avatar_url ? (
+                      <img
+                        src={post.author.avatar_url}
+                        alt={post.author.username}
+                        className="w-14 h-14 rounded-2xl object-cover shadow-md group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-md group-hover:scale-105 transition-transform">
+                        {post.author?.full_name?.charAt(0) || post.author?.username?.charAt(0) || "H"}
+                      </div>
+                    )}
+                  </Link>
+
                   <div className="space-y-1.5 flex-1">
-                    <div className="text-base font-bold text-stone-900 dark:text-white">
-                      {post.author?.full_name || post.author?.username || "Hung Pham Hoang"}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <Link
+                        href={post.author?.username ? `/profile/${post.author.username}` : "#"}
+                        className="text-base font-bold text-stone-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                      >
+                        {post.author?.full_name || post.author?.username || "Tác giả"}
+                      </Link>
+                      {post.author?.username && (
+                        <Link
+                          href={`/profile/${post.author.username}`}
+                          className="text-xs text-blue-600 dark:text-blue-400 font-medium hover:underline"
+                        >
+                          Xem hồ sơ tác giả →
+                        </Link>
+                      )}
                     </div>
-                    <p className="text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-                      Kỹ sư phần mềm đam mê kiến trúc phân tán, backend hiệu năng cao, AI RAG và xây dựng các sản phẩm số tinh tế.
+                    <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+                      {post.author?.bio?.trim()
+                        ? post.author.bio
+                        : `Thành viên gia nhập từ ${
+                            post.author?.created_at
+                              ? new Date(post.author.created_at).toLocaleDateString("vi-VN", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                })
+                              : "năm 2026"
+                          }`}
                     </p>
                   </div>
                 </div>

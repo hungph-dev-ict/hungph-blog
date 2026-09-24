@@ -767,4 +767,21 @@ export async function fetchLinkMetadata(url: string): Promise<{ url: string; tit
   }
 }
 
+export async function updateMyProfile(
+  data: { full_name?: string; avatar_url?: string; bio?: string },
+  token: string
+): Promise<User> {
+  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Cập nhật hồ sơ thất bại");
+  }
+  return res.json();
+}
+
+
 

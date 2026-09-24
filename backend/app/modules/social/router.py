@@ -277,6 +277,7 @@ class UserProfileResponse(BaseModel):
     username: str
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    bio: Optional[str] = None
     created_at: datetime
     followers_count: int
     following_count: int
@@ -303,6 +304,7 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
         username=user.username,
         full_name=user.full_name,
         avatar_url=user.avatar_url,
+        bio=user.bio,
         created_at=user.created_at,
         followers_count=followers_count,
         following_count=following_count,

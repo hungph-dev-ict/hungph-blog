@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.modules.auth.deps import get_current_admin, get_current_user
 from app.modules.auth.models import User
-from app.modules.auth.schemas import GoogleAuthRequest, Token, UserCreate, UserLogin, UserResponse, UserRoleUpdate
+from app.modules.auth.schemas import GoogleAuthRequest, Token, UserCreate, UserLogin, UserResponse, UserRoleUpdate, UserProfileUpdate
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -162,6 +162,25 @@ async def initial_setup(user_in: UserCreate, db: AsyncSession = Depends(get_db))
 
 @router.get("/me", response_model=UserResponse)
 async def get_my_profile(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_my_profile(
+    payload: UserProfileUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Người dùng cập nhật thông tin cá nhân (Họ tên, ảnh đại diện, tiểu sử / bio)."""
+    if payload.full_name is not None:
+        current_user.full_name = payload.full_name.strip() or None
+    if payload.avatar_url is not None:
+        current_user.avatar_url = payload.avatar_url.strip() or None
+    if payload.bio is not None:
+        current_user.bio = payload.bio.strip() or None
+
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
 
 
