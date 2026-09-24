@@ -51,29 +51,40 @@ class IndexResponse(BaseModel):
 @router.get("/status")
 async def rag_status():
     """Kiểm tra trạng thái RAG module."""
-    from app.modules.rag.service import FAISS_INDEX_PATH, FAISS_METADATA_PATH, _faiss_index, _chunk_metadata, load_index
     from app.core.config import settings
-
     has_key = bool(settings.GEMINI_API_KEY)
-    index_exists = FAISS_INDEX_PATH.exists()
-    num_chunks = 0
 
-    if index_exists:
-        if _faiss_index is None:
-            load_index()
-        from app.modules.rag.service import _faiss_index as idx
-        if idx is not None:
-            num_chunks = idx.ntotal
+    try:
+        from app.modules.rag.service import FAISS_INDEX_PATH, FAISS_METADATA_PATH, _faiss_index, _chunk_metadata, load_index
+        index_exists = FAISS_INDEX_PATH.exists()
+        num_chunks = 0
 
-    return {
-        "status": "ready" if (has_key and index_exists) else ("no_key" if not has_key else "not_indexed"),
-        "gemini_api_configured": has_key,
-        "index_exists": index_exists,
-        "num_vectors": num_chunks,
-        "embedding_model": "models/gemini-embedding-001",
-        "llm_model": "gemini-2.5-flash",
-        "description": "RAG Module — Gemini Embeddings + FAISS Vector Store"
-    }
+        if index_exists:
+            if _faiss_index is None:
+                load_index()
+            from app.modules.rag.service import _faiss_index as idx
+            if idx is not None:
+                num_chunks = idx.ntotal
+
+        return {
+            "status": "ready" if (has_key and index_exists and num_chunks > 0) else ("no_key" if not has_key else "not_indexed"),
+            "gemini_api_configured": has_key,
+            "index_exists": index_exists,
+            "num_vectors": num_chunks,
+            "embedding_model": "models/gemini-embedding-001",
+            "llm_model": "gemini-2.5-flash",
+            "description": "RAG Module — Gemini Embeddings + FAISS Vector Store"
+        }
+    except Exception as e:
+        logger.error(f"RAG status check error: {e}")
+        return {
+            "status": "not_ready",
+            "gemini_api_configured": has_key,
+            "index_exists": False,
+            "num_vectors": 0,
+            "error": str(e),
+            "description": f"RAG Module đang khởi tạo: {str(e)}"
+        }
 
 
 @router.post("/index", response_model=IndexResponse)
@@ -135,17 +146,46 @@ async def query_rag(req: RAGQueryRequest, db: AsyncSession = Depends(get_db)):
     """
     RAG Q&A — Tìm kiếm ngữ nghĩa + Gemini trả lời.
     """
-    from app.modules.rag.service import search_similar, generate_answer, FAISS_INDEX_PATH
     from app.core.config import settings
 
     if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="RAG chưa được cấu hình (thiếu GEMINI_API_KEY)")
-
-    if not FAISS_INDEX_PATH.exists():
         raise HTTPException(
             status_code=503,
-            detail="FAISS index chưa được build. Admin cần gọi POST /api/rag/index trước."
+            detail="Hệ thống RAG chưa được cấu hình khóa GEMINI_API_KEY trên server backend."
         )
+
+    try:
+        from app.modules.rag.service import search_similar, generate_answer, FAISS_INDEX_PATH
+    except ImportError as e:
+        logger.error(f"RAG import error: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Thư viện AI trên server đang cập nhật ({str(e)}). Vui lòng thử lại sau vài phút."
+        )
+
+    # Tự động khởi tạo index nếu chưa tồn tại (ví dụ sau khi Render deploy lại)
+    if not FAISS_INDEX_PATH.exists():
+        try:
+            from app.modules.blog.models import Post
+            from app.modules.rag.service import build_index_from_posts
+            stmt = select(Post).where(Post.is_published == True)
+            res = await db.execute(stmt)
+            posts = res.scalars().all()
+            if posts:
+                posts_data = [
+                    {
+                        "id": p.id,
+                        "title": p.title,
+                        "slug": p.slug,
+                        "summary": p.summary or "",
+                        "content_html": p.content_html or "",
+                        "content_markdown": p.content_markdown or "",
+                    }
+                    for p in posts
+                ]
+                build_index_from_posts(posts_data)
+        except Exception as e:
+            logger.warning(f"RAG: Auto build index warning: {e}")
 
     try:
         # Tìm chunks liên quan
