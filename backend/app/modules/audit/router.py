@@ -6,7 +6,7 @@ from sqlalchemy import select, func, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.deps import get_current_user, get_current_admin
 from app.modules.auth.models import User
 from app.modules.audit.models import AuditLog
 
