@@ -1,7 +1,24 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { fetchSeriesBySlug, getFullImageUrl } from "@/lib/api";
+import { fetchSeries, fetchSeriesBySlug, getFullImageUrl } from "@/lib/api";
 import { SeriesDetailClient } from "@/components/blog/SeriesDetailClient";
+
+export const revalidate = 60; // ISR: Tự động cập nhật ngầm sau mỗi 60 giây
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  try {
+    const seriesList = await fetchSeries();
+    if (Array.isArray(seriesList)) {
+      return seriesList.map((s) => ({
+        slug: s.slug,
+      }));
+    }
+  } catch (err) {
+    console.error("Lỗi khi sinh static params cho series:", err);
+  }
+  return [];
+}
 
 interface Props {
   params: Promise<{ slug: string }>;

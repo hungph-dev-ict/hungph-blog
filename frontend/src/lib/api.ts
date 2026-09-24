@@ -77,7 +77,7 @@ export async function fetchPosts(
 
   const res = await fetch(`${API_BASE_URL}/blog/posts?${query.toString()}`, {
     headers: getHeaders(token),
-    cache: "no-store",
+    ...(token ? { cache: "no-store" } : { next: { revalidate: 60 } }),
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch posts: ${res.statusText}`);
@@ -98,7 +98,7 @@ export async function fetchWriteableSeries(token: string): Promise<Series[]> {
 
 export async function fetchPostBySlug(slug: string): Promise<PostDetail> {
   const res = await fetch(`${API_BASE_URL}/blog/posts/${slug}`, {
-    cache: "no-store",
+    next: { revalidate: 60 },
   });
   if (!res.ok) {
     throw new Error(`Post not found: ${slug}`);
@@ -191,7 +191,7 @@ export async function deletePost(id: string, token: string): Promise<void> {
 
 // --- CATEGORIES & TAGS ---
 export async function fetchCategories(): Promise<Category[]> {
-  const res = await fetch(`${API_BASE_URL}/blog/categories`, { cache: "no-store" });
+  const res = await fetch(`${API_BASE_URL}/blog/categories`, { next: { revalidate: 300 } });
   if (!res.ok) return [];
   return res.json();
 }
@@ -240,14 +240,14 @@ export async function deleteCategory(id: string, token: string): Promise<void> {
 }
 
 export async function fetchTags(): Promise<Tag[]> {
-  const res = await fetch(`${API_BASE_URL}/blog/tags`, { cache: "no-store" });
+  const res = await fetch(`${API_BASE_URL}/blog/tags`, { next: { revalidate: 300 } });
   if (!res.ok) return [];
   return res.json();
 }
 
 // --- SERIES & COURSES ---
 export async function fetchSeries(): Promise<Series[]> {
-  const res = await fetch(`${API_BASE_URL}/blog/series`, { cache: "no-store" });
+  const res = await fetch(`${API_BASE_URL}/blog/series`, { next: { revalidate: 120 } });
   if (!res.ok) return [];
   return res.json();
 }
@@ -263,7 +263,7 @@ export async function fetchLatestSeries(): Promise<Series | null> {
 
 export async function fetchSeriesBySlug(slug: string): Promise<SeriesDetail> {
   const res = await fetch(`${API_BASE_URL}/blog/series/${slug}`, {
-    cache: "no-store",
+    next: { revalidate: 60 },
   });
   if (!res.ok) {
     throw new Error(`Series not found: ${slug}`);

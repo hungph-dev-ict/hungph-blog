@@ -1,7 +1,24 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { fetchPostBySlug, getFullImageUrl } from "@/lib/api";
+import { fetchPostBySlug, fetchPosts, getFullImageUrl } from "@/lib/api";
 import { PostDetailClient } from "@/components/blog/PostDetailClient";
+
+export const revalidate = 60; // ISR: Tự động cập nhật ngầm sau mỗi 60 giây
+export const dynamicParams = true; // Các bài viết mới tạo vẫn tự động render và cache on-demand
+
+export async function generateStaticParams() {
+  try {
+    const postsData = await fetchPosts({ limit: 100, include_drafts: false });
+    if (postsData?.items) {
+      return postsData.items.map((post) => ({
+        slug: post.slug,
+      }));
+    }
+  } catch (err) {
+    console.error("Lỗi khi sinh static params cho bài viết:", err);
+  }
+  return [];
+}
 
 interface Props {
   params: Promise<{ slug: string }>;
