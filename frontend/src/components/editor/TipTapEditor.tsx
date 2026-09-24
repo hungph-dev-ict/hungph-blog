@@ -166,6 +166,73 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     immediatelyRender: false,
   });
 
+  // Đồng bộ content khi tải bài viết cũ vào Editor
+  useEffect(() => {
+    if (editor && content && editor.getHTML() !== content) {
+      if (editor.isEmpty && content !== "<p></p>") {
+        editor.commands.setContent(content);
+      }
+    }
+  }, [editor, content]);
+
+  // Tự động quét và chuẩn hóa các raw link có sẵn trong bài viết cũ khi mở trong Editor
+  useEffect(() => {
+    if (!editor) return;
+    const doc = editor.state.doc;
+    const rawLinks: string[] = [];
+
+    doc.descendants((node) => {
+      if (node.isText) {
+        const linkMark = node.marks.find((m) => m.type.name === "link");
+        if (linkMark) {
+          const href = (linkMark.attrs.href as string) || "";
+          const text = (node.text || "").trim();
+          if (
+            (text.startsWith("http://") || text.startsWith("https://") || text.startsWith("/posts/")) &&
+            (href.includes("/posts/") || href.startsWith("http"))
+          ) {
+            rawLinks.push(href);
+          }
+        }
+      }
+    });
+
+    if (rawLinks.length > 0) {
+      const uniqueLinks = Array.from(new Set(rawLinks));
+      uniqueLinks.forEach((url) => {
+        fetchLinkMetadata(url)
+          .then((meta) => {
+            if (meta.title && meta.title !== url) {
+              const currentDoc = editor.state.doc;
+              currentDoc.descendants((node, pos) => {
+                if (node.isText) {
+                  const linkMark = node.marks.find((m) => m.type.name === "link");
+                  if (
+                    linkMark &&
+                    linkMark.attrs.href === url &&
+                    node.text?.trim() === url
+                  ) {
+                    editor
+                      .chain()
+                      .command(({ tr }) => {
+                        tr.replaceWith(
+                          pos,
+                          pos + (node.text?.length || 0),
+                          editor.state.schema.text(meta.title, [linkMark])
+                        );
+                        return true;
+                      })
+                      .run();
+                  }
+                }
+              });
+            }
+          })
+          .catch(() => {});
+      });
+    }
+  }, [editor, content]);
+
   if (!editor) {
     return (
       <div className="p-8 border border-stone-200 dark:border-stone-800 rounded-2xl animate-pulse bg-stone-50 dark:bg-stone-900/50 text-center text-sm text-stone-400">

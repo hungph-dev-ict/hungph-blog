@@ -26,7 +26,7 @@ import {
   Copy,
   Link2,
 } from "lucide-react";
-import { getFullImageUrl, getLikeStatus, toggleLike, reportPost } from "@/lib/api";
+import { getFullImageUrl, getLikeStatus, toggleLike, reportPost, fetchLinkMetadata } from "@/lib/api";
 import { PostDetail, REPORT_REASONS } from "@/lib/types";
 import { TableOfContents } from "@/components/blog/TableOfContents";
 import { ReadingProgressBar } from "@/components/blog/ReadingProgressBar";
@@ -80,6 +80,73 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
     if (!post.series_outline?.chapters) return [];
     return buildChapterTree(post.series_outline.chapters, levels);
   }, [post.series_outline?.chapters, levels]);
+
+  // Bản đồ tra cứu nhanh slug -> tiêu đề bài viết từ lộ trình khóa học (nếu có)
+  const outlineSlugMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    if (post.series_outline?.chapters) {
+      const traverse = (chapters: any[]) => {
+        for (const ch of chapters) {
+          if (ch.lessons) {
+            for (const les of ch.lessons) {
+              if (les.slug && les.title) {
+                map.set(les.slug, les.title);
+              }
+            }
+          }
+          if (ch.children) traverse(ch.children);
+        }
+      };
+      traverse(post.series_outline.chapters);
+    }
+    return map;
+  }, [post.series_outline?.chapters]);
+
+  // Tự động chuẩn hóa link trong HTML: nếu text thẻ <a> là raw URL, thay bằng Tiêu đề bài viết
+  const processedContentHtml = React.useMemo(() => {
+    let html = post.content_html || "";
+    if (outlineSlugMap.size > 0) {
+      html = html.replace(
+        /<a\s+([^>]*?)href=["'](?:https?:\/\/[^"'/]+)?\/posts\/([a-zA-Z0-9_\-]+)["']([^>]*?)>(.*?)<\/a>/gi,
+        (match, before, slug, after, innerText) => {
+          const plain = innerText.replace(/<[^>]+>/g, "").trim();
+          if (
+            (plain.startsWith("http://") ||
+              plain.startsWith("https://") ||
+              plain.startsWith("/posts/") ||
+              plain === slug) &&
+            outlineSlugMap.has(slug)
+          ) {
+            const title = outlineSlugMap.get(slug)!;
+            return `<a ${before}href="https://hungph-blog.vercel.app/posts/${slug}"${after}>${title}</a>`;
+          }
+          return match;
+        }
+      );
+    }
+    return html;
+  }, [post.content_html, outlineSlugMap]);
+
+  // Client-side fallback: Tự động cập nhật tiêu đề cho bất kỳ raw link nào còn sót lại
+  useEffect(() => {
+    const links = document.querySelectorAll<HTMLAnchorElement>(".blog-content a");
+    links.forEach((a) => {
+      const text = (a.textContent || "").trim();
+      const href = a.getAttribute("href") || "";
+      if (
+        (text.startsWith("http://") || text.startsWith("https://") || text.startsWith("/posts/")) &&
+        (href.includes("/posts/") || href.startsWith("http"))
+      ) {
+        fetchLinkMetadata(href)
+          .then((meta) => {
+            if (meta.title && meta.title !== text && meta.title !== href) {
+              a.textContent = meta.title;
+            }
+          })
+          .catch(() => {});
+      }
+    });
+  }, [processedContentHtml]);
 
   useEffect(() => {
     getLikeStatus(post.id, token || undefined)
@@ -738,7 +805,7 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                   <div className="lg:hidden mb-8 space-y-4">
                     {hasCourseOutline && renderCourseOutline(true)}
                     <TableOfContents
-                      contentHtml={post.content_html}
+                      contentHtml={processedContentHtml}
                       initialCollapsed={true}
                       onHeadingsFound={setHeadingCount}
                     />
@@ -747,7 +814,7 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
 
                 <div
                   className="blog-content leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: post.content_html }}
+                  dangerouslySetInnerHTML={{ __html: processedContentHtml }}
                 />
 
                 {/* Course Attribution & Copyright Notice */}
@@ -849,7 +916,7 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
 
                     {/* Table of Contents Desktop (Mặc định mở) */}
                     <TableOfContents
-                      contentHtml={post.content_html}
+                      contentHtml={processedContentHtml}
                       initialCollapsed={false}
                       onHeadingsFound={setHeadingCount}
                     />

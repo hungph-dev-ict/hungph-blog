@@ -49,6 +49,58 @@ def calculate_reading_time(text: str) -> int:
     return max(1, math.ceil(len(words) / 200))
 
 
+async def normalize_internal_links_in_html(db: AsyncSession, content_html: str) -> str:
+    """Tự động phát hiện các thẻ <a> trỏ tới bài viết nội bộ (/posts/[slug] hoặc https://hungph-blog.vercel.app/posts/[slug]).
+    Nếu inner text đang là raw URL, tự động thay thế bằng tiêu đề thực tế của bài viết.
+    """
+    if not content_html:
+        return content_html
+
+    pattern = re.compile(
+        r'<a\s+([^>]*?)href=["\'](?:https?://(?:hungph-blog\.vercel\.app|localhost:\d+))?/posts/([a-zA-Z0-9_\-]+)["\']([^>]*?)>(.*?)</a>',
+        re.IGNORECASE | re.DOTALL
+    )
+
+    matches = list(pattern.finditer(content_html))
+    if not matches:
+        return content_html
+
+    slugs_to_lookup = set()
+    for m in matches:
+        attrs_before, slug, attrs_after, inner_text = m.groups()
+        plain_text = re.sub(r'<[^>]+>', '', inner_text).strip()
+        if (
+            plain_text.startswith("http://")
+            or plain_text.startswith("https://")
+            or plain_text.startswith("/posts/")
+            or plain_text == slug
+        ):
+            slugs_to_lookup.add(slug)
+
+    if not slugs_to_lookup:
+        return content_html
+
+    stmt = select(Post.slug, Post.title).where(Post.slug.in_(slugs_to_lookup))
+    res = await db.execute(stmt)
+    slug_title_map = dict(res.fetchall())
+
+    def replace_link(match):
+        attrs_before, slug, attrs_after, inner_text = match.groups()
+        plain_text = re.sub(r'<[^>]+>', '', inner_text).strip()
+        if (
+            (plain_text.startswith("http://")
+            or plain_text.startswith("https://")
+            or plain_text.startswith("/posts/")
+            or plain_text == slug)
+            and slug in slug_title_map
+        ):
+            title = slug_title_map[slug]
+            return f'<a {attrs_before}href="https://hungph-blog.vercel.app/posts/{slug}"{attrs_after}>{title}</a>'
+        return match.group(0)
+
+    return pattern.sub(replace_link, content_html)
+
+
 async def get_or_create_tags(db: AsyncSession, tag_names: List[str]) -> List[Tag]:
     tags = []
     for name in tag_names:
@@ -542,11 +594,15 @@ async def create_post(
         )
         await db.execute(shift_post_stmt)
 
+    raw_content_html = post_in.content_html or ""
+    content_html = await normalize_internal_links_in_html(db, raw_content_html)
+    reading_time = calculate_reading_time(content_html or post_in.content_markdown or "")
+
     new_post = Post(
         title=post_in.title.strip(),
         slug=slug,
         summary=post_in.summary.strip() if post_in.summary else None,
-        content_html=post_in.content_html,
+        content_html=content_html,
         content_markdown=post_in.content_markdown,
         cover_image=post_in.cover_image,
         is_published=post_in.is_published,
@@ -626,7 +682,7 @@ async def update_post(
     if post_in.summary is not None:
         post.summary = post_in.summary.strip() if post_in.summary else None
     if post_in.content_html is not None:
-        post.content_html = post_in.content_html
+        post.content_html = await normalize_internal_links_in_html(db, post_in.content_html)
         post.reading_time_minutes = calculate_reading_time(post.content_html)
     if post_in.content_markdown is not None:
         post.content_markdown = post_in.content_markdown
