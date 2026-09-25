@@ -124,6 +124,11 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
         }
       );
     }
+    // Tự động bao bọc thẻ <table> bằng container scroll ngang (.table-wrapper) để tránh tràn layout trên mobile
+    if (html.includes("<table")) {
+      html = html.replace(/<div class="table-wrapper">(<table[\s\S]*?<\/table>)<\/div>/gi, "$1");
+      html = html.replace(/(<table[\s\S]*?<\/table>)/gi, '<div class="table-wrapper">$1</div>');
+    }
     return html;
   }, [post.content_html, outlineSlugMap]);
 
@@ -156,6 +161,17 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
             }
           })
           .catch(() => {});
+      }
+    });
+
+    // Client-side fallback: Đảm bảo toàn bộ các bảng trong bài viết đều có thẻ div.table-wrapper bao quanh để cuộn ngang an toàn
+    const tables = document.querySelectorAll(".blog-content table");
+    tables.forEach((table) => {
+      if (!table.parentElement?.classList.contains("table-wrapper")) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "table-wrapper";
+        table.parentNode?.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
       }
     });
   }, [processedContentHtml]);
@@ -326,28 +342,28 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
           )}
 
           {/* Author & Share Bar */}
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center justify-between gap-3 pt-2">
             <Link
               href={post.author?.username ? `/profile/${post.author.username}` : "#"}
-              className="flex items-center gap-3 group"
+              className="flex items-center gap-2.5 sm:gap-3 group min-w-0"
               title="Xem trang cá nhân & theo dõi"
             >
               {post.author?.avatar_url ? (
                 <img
                   src={post.author.avatar_url}
                   alt={post.author.username}
-                  className="w-10 h-10 rounded-full object-cover shadow group-hover:ring-2 group-hover:ring-blue-500 transition-all"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shadow group-hover:ring-2 group-hover:ring-blue-500 transition-all shrink-0"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow group-hover:scale-105 transition-transform">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow group-hover:scale-105 transition-transform shrink-0">
                   {post.author?.full_name?.charAt(0) || post.author?.username?.charAt(0) || "H"}
                 </div>
               )}
-              <div>
-                <div className="text-sm font-semibold text-stone-900 dark:text-stone-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1.5">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-stone-900 dark:text-stone-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1.5 truncate">
                   <span>{post.author?.full_name || post.author?.username || "Tác giả"}</span>
                 </div>
-                <div className="text-xs text-stone-500">
+                <div className="text-xs text-stone-500 truncate">
                   {post.author?.bio?.trim()
                     ? (post.author.bio.length > 55 ? `${post.author.bio.slice(0, 55)}...` : post.author.bio)
                     : `Gia nhập từ ${
@@ -362,41 +378,46 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
               </div>
             </Link>
 
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
+            {/* Action Buttons: Trên iPhone/Mobile xếp 2 cột x 2 hàng, chỉ hiện icon; Trên desktop trải ngang đầy đủ text */}
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2 shrink-0">
               {/* Nút Chỉnh sửa dành cho Tác giả / Admin */}
               {canEdit && (
                 <Link
                   href={`/editor/${post.id}`}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800/80 bg-blue-50/80 dark:bg-blue-950/40 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors shadow-xs"
+                  className="flex items-center justify-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl border border-blue-200 dark:border-blue-800/80 bg-blue-50/80 dark:bg-blue-950/40 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors shadow-xs"
                   title="Chỉnh sửa bài viết này"
+                  aria-label="Chỉnh sửa bài viết"
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Chỉnh sửa</span>
+                  <Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                  <span className="hidden sm:inline">Chỉnh sửa</span>
                 </Link>
               )}
 
+              {/* Nút Chia sẻ */}
               <button
                 onClick={() => setShowShareModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 text-xs font-medium text-stone-600 dark:text-stone-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                className="flex items-center justify-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl border border-stone-200 dark:border-stone-800 text-xs font-medium text-stone-600 dark:text-stone-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
                 title="Chia sẻ bài viết"
+                aria-label="Chia sẻ bài viết"
               >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>Chia sẻ</span>
+                <Share2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                <span className="hidden sm:inline">Chia sẻ</span>
               </button>
 
               {/* Like Button */}
               <button
                 onClick={handleLike}
                 title={liked ? "Bỏ thích" : "Thích bài viết"}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                aria-label={liked ? "Bỏ thích" : "Thích bài viết"}
+                className={`flex items-center justify-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-medium transition-all ${
                   liked
                     ? "border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400"
                     : "border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:border-rose-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20"
                 }`}
               >
-                <Heart className={`w-3.5 h-3.5 transition-transform ${liked ? "fill-rose-500 scale-110" : ""}`} />
-                <span>{liked ? "Đã thích" : "Thích"}</span>
-                {likesCount > 0 && <span className="font-bold">{likesCount}</span>}
+                <Heart className={`w-4 h-4 sm:w-3.5 sm:h-3.5 transition-transform ${liked ? "fill-rose-500 scale-110" : ""}`} />
+                <span className="hidden sm:inline">{liked ? "Đã thích" : "Thích"}</span>
+                {likesCount > 0 && <span className="font-bold text-[11px] sm:text-xs leading-none">{likesCount}</span>}
               </button>
 
               {/* Report Button */}
@@ -404,9 +425,10 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                 <button
                   onClick={() => setShowReport(true)}
                   title="Tố cáo bài viết"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-300 dark:border-rose-900 bg-rose-50/70 dark:bg-rose-950/30 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 hover:border-rose-400 transition-all shadow-xs"
+                  aria-label="Tố cáo bài viết"
+                  className="flex items-center justify-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50/70 dark:bg-rose-950/30 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 hover:border-rose-400 transition-all shadow-xs"
                 >
-                  <Flag className="w-3.5 h-3.5 fill-rose-500/20" />
+                  <Flag className="w-4 h-4 sm:w-3.5 sm:h-3.5 fill-rose-500/20" />
                   <span className="hidden sm:inline">Tố cáo</span>
                 </button>
               )}

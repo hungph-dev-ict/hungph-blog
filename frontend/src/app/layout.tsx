@@ -114,7 +114,7 @@ export default function RootLayout({
         <AuthProvider>
           <LoadingProvider>
             <Header />
-            <main className="flex-1 max-w-7xl 2xl:max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main className="flex-1 max-w-7xl 2xl:max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 min-w-0 overflow-x-hidden">
               {children}
             </main>
             <Footer />
