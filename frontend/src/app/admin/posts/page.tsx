@@ -23,15 +23,18 @@ import {
   Loader2,
   X,
   RefreshCw,
+  Camera,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { fetchPosts, deletePost, updatePost, fetchCategories } from "@/lib/api";
+import { fetchPosts, deletePost, updatePost, fetchCategories, getFullImageUrl } from "@/lib/api";
 import { Category, PostListItem } from "@/lib/types";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminGuard } from "@/components/admin/AdminGuard";
 import { Pagination } from "@/components/common/Pagination";
 import { LoadingOverlay } from "@/components/common/LoadingOverlay";
+import { EditCoverModal } from "@/components/blog/EditCoverModal";
 
 export default function AdminPostsPage() {
   const router = useRouter();
@@ -39,6 +42,7 @@ export default function AdminPostsPage() {
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [coverModalPost, setCoverModalPost] = useState<PostListItem | null>(null);
 
   // Filter & Search & Sort states
   const [searchQuery, setSearchQuery] = useState("");
@@ -505,8 +509,48 @@ export default function AdminPostsPage() {
                       key={post.id}
                       className="hover:bg-stone-50/70 dark:hover:bg-stone-800/40 transition-colors"
                     >
-                      <td className="py-4 px-4 font-semibold text-stone-900 dark:text-stone-100 max-w-xs truncate">
-                        <span title={post.title}>{post.title}</span>
+                      <td className="py-3 px-4 font-semibold text-stone-900 dark:text-stone-100 max-w-sm">
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => canManage && setCoverModalPost(post)}
+                            disabled={isProcessing || !canManage}
+                            className={`relative w-12 h-9 sm:w-14 sm:h-10 rounded-lg overflow-hidden shrink-0 border border-stone-200 dark:border-stone-700 group/thumb bg-stone-100 dark:bg-stone-800 transition-transform active:scale-95 shadow-xs ${
+                              canManage ? "cursor-pointer" : "cursor-default"
+                            }`}
+                            title={canManage ? "Bấm để đổi ảnh bìa" : undefined}
+                          >
+                            <img
+                              src={getFullImageUrl(post.cover_image)}
+                              alt={post.title}
+                              className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform duration-300"
+                            />
+                            {canManage && (
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                <Camera className="w-3.5 h-3.5" />
+                              </div>
+                            )}
+                            {!post.cover_image && (
+                              <span
+                                className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-white dark:ring-stone-900"
+                                title="Đang dùng ảnh mặc định"
+                              />
+                            )}
+                          </button>
+
+                          <div className="min-w-0 flex-1">
+                            <span className="truncate block text-sm" title={post.title}>
+                              {post.title}
+                            </span>
+                            <span className="text-[11px] text-stone-400 font-normal">
+                              {post.cover_image ? (
+                                <span className="text-emerald-600 dark:text-emerald-400">Ảnh riêng</span>
+                              ) : (
+                                <span className="text-stone-400">Ảnh mặc định</span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
                       </td>
 
                       {isAdmin && (
@@ -571,9 +615,21 @@ export default function AdminPostsPage() {
                           )}
                           {canManage && (
                             <>
+                              <button
+                                type="button"
+                                onClick={() => setCoverModalPost(post)}
+                                disabled={isProcessing}
+                                className={`p-1.5 rounded-lg text-stone-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
+                                  isProcessing ? "pointer-events-none opacity-40" : ""
+                                }`}
+                                title="Đổi ảnh bìa (Cover)"
+                              >
+                                <ImageIcon className="w-4 h-4" />
+                              </button>
+
                               <Link
                                 href={`/editor/${post.id}`}
-                                className={`p-1.5 rounded-lg text-stone-400 hover:text-stone-900 dark:hover:text-white transition-colors ${
+                                className={`p-1.5 rounded-lg text-stone-400 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
                                   isProcessing ? "pointer-events-none opacity-40" : ""
                                 }`}
                                 title="Chỉnh sửa bài viết"
@@ -619,6 +675,25 @@ export default function AdminPostsPage() {
         </div>
       )}
       </div>
+
+      {/* Standalone Quick Cover Edit Modal */}
+      {coverModalPost && token && (
+        <EditCoverModal
+          isOpen={Boolean(coverModalPost)}
+          onClose={() => setCoverModalPost(null)}
+          postId={coverModalPost.id}
+          postTitle={coverModalPost.title}
+          currentCoverImage={coverModalPost.cover_image}
+          token={token}
+          onSuccess={(newCoverUrl) => {
+            setPosts((prev) =>
+              prev.map((p) =>
+                p.id === coverModalPost.id ? { ...p, cover_image: newCoverUrl || undefined } : p
+              )
+            );
+          }}
+        />
+      )}
     </div>
     </AdminGuard>
   );

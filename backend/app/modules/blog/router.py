@@ -756,7 +756,7 @@ async def update_post(
     if post_in.content_markdown is not None:
         post.content_markdown = post_in.content_markdown
     if post_in.cover_image is not None:
-        post.cover_image = post_in.cover_image
+        post.cover_image = post_in.cover_image.strip() if post_in.cover_image.strip() else None
 
     if post_in.series_id is not None:
         post.series_id = post_in.series_id if post_in.series_id != "" else None

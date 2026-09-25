@@ -31,6 +31,9 @@ import {
   FileText,
   AlertTriangle,
   Flame,
+  Image as ImageIcon,
+  Trash2,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useLoading } from "@/lib/loading-context";
@@ -83,6 +86,8 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   const [summary, setSummary] = useState("");
   const [contentHtml, setContentHtml] = useState("<p></p>");
   const [coverImage, setCoverImage] = useState("");
+  const [coverTab, setCoverTab] = useState<"upload" | "url">("upload");
+  const [isCoverDragOver, setIsCoverDragOver] = useState<boolean>(false);
   const [categoryId, setCategoryId] = useState("");
   const [tagsInput, setTagsInput] = useState("");
   const [isPublished, setIsPublished] = useState(false);
@@ -506,9 +511,16 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
     }
   };
 
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleCoverUploadFile = async (file: File) => {
     if (!file || !token) return;
+    if (!file.type.startsWith("image/")) {
+      triggerToast("Vui lòng chọn file định dạng hình ảnh (PNG, JPG, WEBP, GIF, SVG)", "error");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      triggerToast("Dung lượng ảnh tối đa là 10MB", "error");
+      return;
+    }
 
     await withLoading(async () => {
       try {
@@ -519,6 +531,13 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         triggerToast(`Lỗi upload ảnh cover: ${err.message}`, "error");
       }
     }, "Đang tải ảnh bìa lên...");
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await handleCoverUploadFile(file);
+    }
   };
 
   const handleAddCategory = async () => {
@@ -1341,18 +1360,82 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
             </div>
 
             {/* Cover Image */}
-            <div className="space-y-2">
+            <div className="space-y-2.5 p-3.5 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/40">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
-                  Ảnh bìa (Cover Image)
+                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Ảnh bìa (Cover Image)</span>
                 </label>
+                {coverImage.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => setCoverImage("")}
+                    className="text-[11px] text-rose-500 hover:text-rose-600 font-medium hover:underline flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Dùng ảnh mặc định</span>
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-stone-400 font-medium flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <span>Ảnh mặc định</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Cover Preview Box */}
+              <div className="relative rounded-xl overflow-hidden border border-stone-200 dark:border-stone-700 aspect-video bg-stone-100 dark:bg-stone-800 shadow-inner group">
+                <img
+                  src={getFullImageUrl(coverImage)}
+                  alt="Cover preview"
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Badge Overlay */}
+                <div className="absolute top-2 left-2 flex items-center gap-1 rounded-full text-[10px] font-semibold shadow-xs">
+                  {coverImage.trim() ? (
+                    <span className="bg-emerald-500 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Check className="w-2.5 h-2.5" /> Ảnh tùy chỉnh
+                    </span>
+                  ) : (
+                    <span className="bg-stone-900/80 text-amber-300 px-2 py-0.5 rounded-full">
+                      Ảnh mặc định hệ thống
+                    </span>
+                  )}
+                </div>
+
+                {!coverImage.trim() && (
+                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/75 to-transparent p-2 text-[10px] text-stone-200">
+                    Chưa chọn ảnh riêng • Đang dùng ảnh mặc định (/default-post.jpg)
+                  </div>
+                )}
+              </div>
+
+              {/* Switch Tabs: Upload vs URL */}
+              <div className="grid grid-cols-2 p-0.5 bg-stone-200/70 dark:bg-stone-800 rounded-lg text-[11px] font-medium">
                 <button
                   type="button"
-                  onClick={() => coverInputRef.current?.click()}
-                  className="text-[11px] text-blue-600 hover:underline flex items-center gap-1"
+                  onClick={() => setCoverTab("upload")}
+                  className={`py-1 rounded-md flex items-center justify-center gap-1 transition-all ${
+                    coverTab === "upload"
+                      ? "bg-white dark:bg-stone-900 text-blue-600 dark:text-blue-400 shadow-xs font-semibold"
+                      : "text-stone-600 dark:text-stone-400 hover:text-stone-900"
+                  }`}
                 >
                   <Upload className="w-3 h-3" />
                   <span>Tải ảnh lên</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCoverTab("url")}
+                  className={`py-1 rounded-md flex items-center justify-center gap-1 transition-all ${
+                    coverTab === "url"
+                      ? "bg-white dark:bg-stone-900 text-blue-600 dark:text-blue-400 shadow-xs font-semibold"
+                      : "text-stone-600 dark:text-stone-400 hover:text-stone-900"
+                  }`}
+                >
+                  <LinkIcon className="w-3 h-3" />
+                  <span>Dán URL ảnh</span>
                 </button>
               </div>
 
@@ -1364,28 +1447,52 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
                 className="hidden"
               />
 
-              <input
-                type="text"
-                value={coverImage}
-                onChange={(e) => setCoverImage(e.target.value)}
-                placeholder="Dán URL ảnh hoặc tải lên..."
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/80 text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-
-              {coverImage && (
-                <div className="relative rounded-xl overflow-hidden border border-stone-200 dark:border-stone-700 h-32 bg-stone-100">
-                  <img
-                    src={getFullImageUrl(coverImage)}
-                    alt="Cover preview"
-                    className="w-full h-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setCoverImage("")}
-                    className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px]"
-                  >
-                    Xóa
-                  </button>
+              {coverTab === "upload" ? (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsCoverDragOver(true);
+                  }}
+                  onDragLeave={() => setIsCoverDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsCoverDragOver(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleCoverUploadFile(file);
+                  }}
+                  onClick={() => coverInputRef.current?.click()}
+                  className={`border border-dashed rounded-xl p-3 text-center cursor-pointer transition-all ${
+                    isCoverDragOver
+                      ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20"
+                      : "border-stone-300 dark:border-stone-700 hover:border-blue-400 bg-white dark:bg-stone-900/60"
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2 text-stone-500">
+                    <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-[11px] font-medium">Bấm chọn ảnh hoặc kéo thả vào đây</span>
+                  </div>
+                  <p className="text-[10px] text-stone-400 mt-0.5">Hỗ trợ JPG, PNG, WEBP (tối đa 10MB)</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={coverImage}
+                      onChange={(e) => setCoverImage(e.target.value)}
+                      placeholder="https://images.unsplash.com/... hoặc link ảnh"
+                      className="w-full pl-2.5 pr-7 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {coverImage && (
+                      <button
+                        type="button"
+                        onClick={() => setCoverImage("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
