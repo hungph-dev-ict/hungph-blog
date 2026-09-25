@@ -373,7 +373,11 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                               year: "numeric",
                             })
                           : "2026"
-                      }`} • <span className="text-blue-500 font-medium">Xem hồ sơ</span>
+                      }`}
+                </div>
+                <div className="text-[11px] sm:text-xs text-blue-500 font-medium group-hover:underline flex items-center gap-0.5 mt-0.5">
+                  <span>Xem hồ sơ</span>
+                  <span className="text-[10px]">→</span>
                 </div>
               </div>
             </Link>
