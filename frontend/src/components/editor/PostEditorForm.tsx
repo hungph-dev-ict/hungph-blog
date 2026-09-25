@@ -108,6 +108,25 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDeviceMode, setPreviewDeviceMode] = useState<"desktop" | "mobile">("desktop");
 
+  // Khóa scroll của body và bắt phím Escape khi mở modal xem trước
+  useEffect(() => {
+    if (!showPreviewModal) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowPreviewModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showPreviewModal]);
+
   // Track initial state to detect unsaved changes
   const initialDataRef = useRef<{
     title: string;
@@ -1626,7 +1645,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
       {/* MODAL XEM TRƯỚC BÀI VIẾT (PREVIEW MODAL)                 */}
       {/* ========================================================= */}
       {showPreviewModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex flex-col justify-between animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex flex-col overflow-hidden animate-in fade-in duration-200">
           {/* Top Bar điều khiển Xem trước */}
           <div className="bg-stone-900 border-b border-stone-800 px-4 py-3 flex items-center justify-between text-white shrink-0">
             <div className="flex items-center gap-3">
@@ -1692,11 +1711,11 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
           </div>
 
           {/* Vùng cuộn xem trước nội dung */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-6 flex justify-center bg-stone-950/50">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 flex justify-center bg-stone-950/50">
             <div
-              className={`bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-2xl transition-all duration-200 overflow-hidden flex flex-col ${
+              className={`bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-2xl transition-all duration-200 overflow-hidden flex flex-col h-fit my-2 sm:my-6 ${
                 previewDeviceMode === "mobile"
-                  ? "w-full max-w-[420px] min-h-[600px] my-auto"
+                  ? "w-full max-w-[420px]"
                   : "w-full max-w-4xl"
               }`}
             >
