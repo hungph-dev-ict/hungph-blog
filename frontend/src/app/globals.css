@@ -69,6 +69,13 @@
 }
 
 .blog-content h1,
+.blog-content h2,
+.blog-content h3,
+.blog-content h4 {
+  scroll-margin-top: 5.5rem;
+}
+
+.blog-content h1,
 .ProseMirror h1 {
   font-size: 2rem;
   font-weight: 800;
@@ -96,6 +103,16 @@
   font-weight: 600;
   line-height: 1.4;
   margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: inherit;
+}
+
+.blog-content h4,
+.ProseMirror h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 1rem;
   margin-bottom: 0.5rem;
   color: inherit;
 }

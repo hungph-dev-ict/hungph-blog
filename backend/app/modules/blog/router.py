@@ -43,6 +43,7 @@ from app.modules.blog.schemas import (
 )
 
 router = APIRouter(prefix="/blog", tags=["Blog"])
+logger = logging.getLogger(__name__)
 
 
 def calculate_reading_time(text: str) -> int:
@@ -660,7 +661,10 @@ async def create_post(
                 "content_html": new_post.content_html or "",
                 "content_markdown": new_post.content_markdown or "",
             }
-            loop = asyncio.get_event_loop()
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.get_event_loop()
             loop.run_in_executor(None, update_post_in_index, post_dict)
         except Exception as rag_err:
             logger.warning(f"RAG auto-index on create warning: {rag_err}")
@@ -837,12 +841,30 @@ async def update_post(
                 "content_html": post.content_html or "",
                 "content_markdown": post.content_markdown or "",
             }
-            loop = asyncio.get_event_loop()
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.get_event_loop()
             loop.run_in_executor(None, update_post_in_index, post_dict)
         except Exception as rag_err:
             logger.warning(f"RAG auto-index warning: {rag_err}")
 
-    return PostDetail.model_validate(post)
+    # Re-query with all relations eagerly loaded so PostDetail.model_validate succeeds
+    stmt = (
+        select(Post)
+        .where(Post.id == post.id)
+        .options(
+            selectinload(Post.category),
+            selectinload(Post.tags),
+            selectinload(Post.author),
+            selectinload(Post.series),
+            selectinload(Post.chapter),
+        )
+    )
+    res = await db.execute(stmt)
+    refreshed_post = res.scalar_one()
+
+    return PostDetail.model_validate(refreshed_post)
 
 
 @router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1683,8 +1705,11 @@ async def update_comment(
 
     comment.content = content
     await db.commit()
-    await db.refresh(comment)
-    return CommentResponse.model_validate(comment)
+
+    stmt = select(Comment).where(Comment.id == comment.id).options(selectinload(Comment.replies))
+    res = await db.execute(stmt)
+    refreshed_comment = res.scalar_one()
+    return CommentResponse.model_validate(refreshed_comment)
 
 
 @router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)

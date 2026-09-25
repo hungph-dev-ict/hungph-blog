@@ -1,7 +1,9 @@
+import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
@@ -53,6 +55,14 @@ async def init_default_data():
                     await conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {col} {col_def};"))
                 else:
                     await conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {col_def};"))
+        except Exception:
+            pass
+
+    if not is_sqlite:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN target_id TYPE VARCHAR(255);"))
+                await conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN summary TYPE TEXT;"))
         except Exception:
             pass
 
@@ -552,6 +562,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.getLogger("main").error(f"Unhandled server error on {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+    )
 
 # Static file serving cho ảnh uploads local
 uploads_dir = os.path.join(os.getcwd(), "uploads")

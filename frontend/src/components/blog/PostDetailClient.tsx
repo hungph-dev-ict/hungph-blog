@@ -127,6 +127,18 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
     return html;
   }, [post.content_html, outlineSlugMap]);
 
+  // Tính toán số lượng mục lục (Headings) trực tiếp từ content HTML để tránh lỗi vòng lặp render
+  const parsedHeadingsCount = React.useMemo(() => {
+    if (!processedContentHtml) return 0;
+    const matches = processedContentHtml.match(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi);
+    if (!matches) return 0;
+    const validMatches = matches.filter((m) => {
+      const text = m.replace(/<[^>]+>/g, "").trim();
+      return text.length > 0;
+    });
+    return validMatches.length;
+  }, [processedContentHtml]);
+
   // Client-side fallback: Tự động cập nhật tiêu đề cho bất kỳ raw link nào còn sót lại
   useEffect(() => {
     const links = document.querySelectorAll<HTMLAnchorElement>(".blog-content a");
@@ -677,7 +689,7 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
         {/* Main Content Layout with Sidebar */}
         {(() => {
           const hasCourseOutline = Boolean(post.series_outline && chapterTree.length > 0);
-          const hasTOC = headingCount > 0;
+          const hasTOC = headingCount > 0 || parsedHeadingsCount > 0;
           const hasSidebarContent = hasCourseOutline || hasTOC;
 
           const renderCourseOutline = (isMobile = false) => {
@@ -815,11 +827,13 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                 {hasSidebarContent && (
                   <div className="lg:hidden mb-8 space-y-4">
                     {hasCourseOutline && renderCourseOutline(true)}
-                    <TableOfContents
-                      contentHtml={processedContentHtml}
-                      initialCollapsed={true}
-                      onHeadingsFound={setHeadingCount}
-                    />
+                    {hasTOC && (
+                      <TableOfContents
+                        contentHtml={processedContentHtml}
+                        initialCollapsed={true}
+                        onHeadingsFound={setHeadingCount}
+                      />
+                    )}
                   </div>
                 )}
 
@@ -964,11 +978,13 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                     {hasCourseOutline && renderCourseOutline(false)}
 
                     {/* Table of Contents Desktop (Mặc định mở) */}
-                    <TableOfContents
-                      contentHtml={processedContentHtml}
-                      initialCollapsed={false}
-                      onHeadingsFound={setHeadingCount}
-                    />
+                    {hasTOC && (
+                      <TableOfContents
+                        contentHtml={processedContentHtml}
+                        initialCollapsed={false}
+                        onHeadingsFound={setHeadingCount}
+                      />
+                    )}
                   </div>
                 </aside>
               )}

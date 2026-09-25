@@ -21,10 +21,10 @@ class AuditLog(Base):
     # USER_LOGIN, USER_LOGOUT, USER_REGISTER, USER_UPDATE_PROFILE
 
     target_type = Column(String(30), nullable=True, index=True)  # post | comment | series | user | auth
-    target_id = Column(String(100), nullable=True)               # ID hoặc slug bài viết / đối tượng
+    target_id = Column(String(255), nullable=True)               # ID hoặc slug bài viết / đối tượng (cho phép slug dài)
     target_title = Column(String(255), nullable=True)            # Tiêu đề bài viết hoặc tên đối tượng liên quan
 
-    summary = Column(String(500), nullable=False)                # Tóm tắt hành động tiếng Việt rõ ràng
+    summary = Column(Text, nullable=False)                       # Tóm tắt hành động tiếng Việt rõ ràng
     details = Column(Text, nullable=True)                        # Dữ liệu JSON chi tiết (nội dung bình luận, lý do, headers...)
 
     ip_address = Column(String(45), nullable=True, index=True)   # Địa chỉ IP truy cập

@@ -7,6 +7,7 @@ interface TOCItem {
   id: string;
   text: string;
   level: number;
+  rawLevel: number;
 }
 
 interface TableOfContentsProps {
@@ -27,25 +28,39 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
   const [isCollapsed, setIsCollapsed] = useState<boolean>(initialCollapsed);
 
   useEffect(() => {
-    // Parse H2 and H3 from the article content
+    // Parse H1, H2, H3, H4 from the article content
     const parser = new DOMParser();
     const doc = parser.parseFromString(contentHtml, "text/html");
-    const elements = doc.querySelectorAll("h2, h3");
+    const elements = doc.querySelectorAll("h1, h2, h3, h4");
 
-    const items: TOCItem[] = [];
+    const rawItems: { id: string; text: string; rawLevel: number }[] = [];
     elements.forEach((el, index) => {
       const text = (el.textContent || "").trim();
       if (!text) return;
       let id = el.id;
       if (!id) {
-        id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+        const cleanSlug = text
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        id = `heading-${index}-${cleanSlug || "section"}`;
       }
-      items.push({
+      rawItems.push({
         id,
         text,
-        level: el.tagName === "H2" ? 2 : 3,
+        rawLevel: parseInt(el.tagName.substring(1), 10),
       });
     });
+
+    const minLevel = rawItems.length > 0 ? Math.min(...rawItems.map((r) => r.rawLevel)) : 1;
+    const items: TOCItem[] = rawItems.map((r) => ({
+      id: r.id,
+      text: r.text,
+      rawLevel: r.rawLevel,
+      level: r.rawLevel - minLevel + 1,
+    }));
 
     setHeadings(items);
     if (onHeadingsFound) {
@@ -55,7 +70,9 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
     // Add corresponding IDs to actual rendered DOM elements
     const article = document.querySelector(".blog-content");
     if (article) {
-      const renderedHeadings = article.querySelectorAll("h2, h3");
+      const renderedHeadings = Array.from(article.querySelectorAll("h1, h2, h3, h4")).filter(
+        (el) => (el.textContent || "").trim().length > 0
+      );
       renderedHeadings.forEach((el, index) => {
         if (items[index]) {
           el.id = items[index].id;
@@ -72,11 +89,15 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
           }
         });
       },
-      { rootMargin: "-20% 0% -60% 0%" }
+      { rootMargin: "-90px 0% -60% 0%" }
     );
 
-    const headingNodes = document.querySelectorAll(".blog-content h2, .blog-content h3");
-    headingNodes.forEach((node) => observer.observe(node));
+    if (article) {
+      const renderedHeadings = Array.from(article.querySelectorAll("h1, h2, h3, h4")).filter(
+        (el) => (el.textContent || "").trim().length > 0
+      );
+      renderedHeadings.forEach((node) => observer.observe(node));
+    }
 
     return () => observer.disconnect();
   }, [contentHtml, onHeadingsFound]);
@@ -92,7 +113,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
     if (!targetElement) {
       const article = document.querySelector(".blog-content");
       if (article) {
-        const headings = article.querySelectorAll("h2, h3");
+        const headings = article.querySelectorAll("h1, h2, h3, h4");
         for (const h of headings) {
           if ((h.textContent || "").trim() === text.trim()) {
             h.id = id;
@@ -152,7 +173,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
       </button>
 
       {!isCollapsed && (
-        <nav className="mt-3 pt-3 border-t border-stone-100 dark:border-stone-800 space-y-1 text-sm max-h-[60vh] overflow-y-auto pr-2 animate-in fade-in duration-150">
+        <nav className="mt-3 pt-3 border-t border-stone-100 dark:border-stone-800 space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto pr-2 animate-in fade-in duration-150">
           {headings.map((item) => {
             const isActive = activeId === item.id;
             return (
@@ -161,7 +182,11 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
                 href={`#${item.id}`}
                 onClick={(e) => handleScrollTo(e, item.id, item.text)}
                 className={`block py-1 transition-colors leading-snug cursor-pointer ${
-                  item.level === 3 ? "pl-4 text-xs" : "font-medium text-xs sm:text-sm"
+                  item.level === 1
+                    ? "font-medium text-xs sm:text-sm"
+                    : item.level === 2
+                    ? "pl-3 text-xs"
+                    : "pl-6 text-xs text-stone-500"
                 } ${
                   isActive
                     ? "text-blue-600 dark:text-blue-400 font-bold"
@@ -177,4 +202,5 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
     </div>
   );
 };
+
 

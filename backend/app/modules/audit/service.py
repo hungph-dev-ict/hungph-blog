@@ -69,20 +69,24 @@ async def record_audit_log(
 
         log_entry = AuditLog(
             user_id=user_id,
-            actor_name=actor_name,
-            actor_email=actor_email,
-            action=action,
-            target_type=target_type,
-            target_id=str(target_id) if target_id else None,
-            target_title=target_title[:255] if target_title else None,
-            summary=summary,
+            actor_name=str(actor_name)[:100] if actor_name else None,
+            actor_email=str(actor_email)[:100] if actor_email else None,
+            action=str(action)[:50],
+            target_type=str(target_type)[:30] if target_type else None,
+            target_id=str(target_id)[:255] if target_id else None,
+            target_title=str(target_title)[:255] if target_title else None,
+            summary=str(summary)[:1000] if summary else "",
             details=details_str,
-            ip_address=ip_address,
-            user_agent=user_agent,
+            ip_address=str(ip_address)[:45] if ip_address else None,
+            user_agent=str(user_agent)[:300] if user_agent else None,
         )
         db.add(log_entry)
         await db.commit()
         return log_entry
     except Exception as e:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
         logger.error(f"Lỗi khi ghi audit log ({action}): {e}", exc_info=True)
         return None
