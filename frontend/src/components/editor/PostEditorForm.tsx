@@ -744,10 +744,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         items={[
           ...(isAdmin
             ? [{ label: "Quản trị", href: "/admin/posts" }]
-            : [
-                { label: "Trang chủ", href: "/" },
-                { label: "Bài viết của tôi", href: "/posts/manage" },
-              ]),
+            : [{ label: "Bài viết của tôi", href: "/posts/manage" }]),
           ...(isCoursePost
             ? [
                 {

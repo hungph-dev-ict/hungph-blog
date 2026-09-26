@@ -126,8 +126,7 @@ export default function ProfilePage() {
       {/* Breadcrumbs */}
       <Breadcrumbs
         items={[
-          { label: "Trang chủ", href: "/" },
-          { label: "Thành viên", href: "/" },
+          { label: "Thành viên" },
           { label: profile.full_name || `@${profile.username}` },
         ]}
       />

@@ -15,9 +15,20 @@ interface BreadcrumbsProps {
 export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = "" }) => {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://hungph-blog.vercel.app";
 
+  // Filter out redundant "Trang chủ" / "Home" if passed as initial item
+  const validItems = items.filter(
+    (item, index) =>
+      !(
+        index === 0 &&
+        (item.label.trim().toLowerCase() === "trang chủ" ||
+          item.label.trim().toLowerCase() === "home" ||
+          item.href === "/")
+      )
+  );
+
   const allItems: BreadcrumbItem[] = [
     { label: "Trang chủ", href: "/" },
-    ...items,
+    ...validItems,
   ];
 
   // Schema.org BreadcrumbList JSON-LD
@@ -51,8 +62,8 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = "" 
           <span>Trang chủ</span>
         </Link>
 
-        {items.map((item, index) => {
-          const isLast = index === items.length - 1;
+        {validItems.map((item, index) => {
+          const isLast = index === validItems.length - 1;
           return (
             <React.Fragment key={index}>
               <ChevronRight className="w-3 h-3 text-stone-300 dark:text-stone-600 shrink-0" />
