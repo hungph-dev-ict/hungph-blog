@@ -478,11 +478,26 @@ function HomeContent() {
   const [spotlightLoaded, setSpotlightLoaded] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchPlaceholder, setSearchPlaceholder] = useState<string>("Tìm kiếm...");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingMessage, setLoadingMessage] = useState<string>("Đang tải bài viết mới nhất...");
   const [seriesLoading, setSeriesLoading] = useState<boolean>(true);
   const [categoriesLoading, setCategoriesLoading] = useState<boolean>(true);
+
+  // Responsive Search Placeholder (gọn gàng 'Tìm kiếm...' trên mobile để không bị cụt chữ)
+  useEffect(() => {
+    const updatePlaceholder = () => {
+      if (window.innerWidth >= 640) {
+        setSearchPlaceholder("Tìm kiếm chủ đề, giải pháp kiến trúc, Claude RAG, distributed cache...");
+      } else {
+        setSearchPlaceholder("Tìm kiếm...");
+      }
+    };
+    updatePlaceholder();
+    window.addEventListener("resize", updatePlaceholder);
+    return () => window.removeEventListener("resize", updatePlaceholder);
+  }, []);
 
   // Read URL tag param if present
   useEffect(() => {
@@ -645,15 +660,15 @@ function HomeContent() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm kiếm chủ đề, giải pháp kiến trúc, Claude RAG, distributed cache..."
-                className="w-full pl-11 pr-28 py-3.5 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white/90 dark:bg-stone-950/80 text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all shadow-sm"
+                placeholder={searchPlaceholder}
+                className="w-full pl-11 pr-24 sm:pr-28 py-3 sm:py-3.5 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white/90 dark:bg-stone-950/80 text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all shadow-sm"
               />
               <button
                 type="submit"
-                className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center gap-1.5"
               >
                 <span>Tìm kiếm</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3.5 h-3.5 hidden sm:inline" />
               </button>
             </div>
 
