@@ -50,7 +50,7 @@ export const Footer: React.FC = () => {
               HungPH<span className="text-blue-600">.</span>blog
             </div>
             <p className="text-sm text-stone-500 dark:text-stone-400 leading-relaxed">
-              Không gian cá nhân ghi chép về kỹ thuật phần mềm, thiết kế hệ thống, AI, và những suy tư hàng ngày.
+              Góc nhỏ ghi lại hành trình học và làm — nơi lưu giữ những thử nghiệm, bài học và nỗ lực hoàn thiện mỗi ngày.
             </p>
           </div>
 

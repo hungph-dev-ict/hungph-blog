@@ -688,22 +688,20 @@ function HomeContent() {
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
             <span className="tracking-wide uppercase text-[11px] font-mono">
-              System Design • Software Architecture &amp; Next-Gen AI
+              Action Over Theory • Build To Learn
             </span>
           </div>
 
-          {/* Main Headline */}
-          <div className="space-y-2">
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-stone-900 dark:text-white leading-[1.12]">
-              Định Hình Tư Duy <br />
-              <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 dark:from-cyan-300 dark:via-blue-400 dark:to-indigo-300 bg-clip-text text-transparent">
-                Kiến Trúc &amp; Trí Tuệ Nhân Tạo.
+          {/* Main Slogan */}
+          <div className="space-y-1">
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.08]">
+              <span className="block text-stone-900/40 dark:text-stone-400/80">
+                Đừng đọc
+              </span>
+              <span className="block bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 dark:from-cyan-300 dark:via-blue-400 dark:to-indigo-300 bg-clip-text text-transparent font-black">
+                Hãy làm
               </span>
             </h1>
-            <p className="text-base sm:text-lg text-stone-600 dark:text-stone-300 max-w-2xl leading-relaxed pt-1">
-              Không gian chia sẻ đa chiều về kiến trúc hệ thống phân tán, backend hiệu năng cao,
-              Claude AI Multi-Agent, RAG và tư duy xây dựng các giải pháp số bền vững.
-            </p>
           </div>
 
           {/* Command Prompt Search Bar */}
