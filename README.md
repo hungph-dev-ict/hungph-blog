@@ -27,6 +27,21 @@ Hệ thống Blog cá nhân hiện đại, kiến trúc module phân tách hoàn
 
 ## 🚀 Khởi Chạy Local (Phát Triển Trên Máy Cá Nhân)
 
+### Cách Nhanh Nhất: Dùng script `run.sh` (Chạy cả Frontend + Backend)
+Chỉ cần chạy 1 lệnh duy nhất tại thư mục gốc:
+```bash
+./run.sh
+```
+Script sẽ tự động:
+- Kiểm tra môi trường virtualenv Python và node_modules.
+- Giải phóng hoặc cảnh báo nếu cổng 8000 / 3000 đang bị chiếm dụng.
+- Khởi động đồng thời cả Backend FastAPI (cổng 8000) và Frontend Next.js (cổng 3000).
+- Nhấn `Ctrl + C` để tắt an toàn cả 2 server cùng lúc.
+
+---
+
+### Cách Thủ Công: Khởi chạy từng dịch vụ riêng biệt
+
 ### 1. Khởi động Backend (FastAPI)
 ```bash
 cd backend
