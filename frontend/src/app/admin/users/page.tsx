@@ -127,22 +127,22 @@ export default function AdminUsersPage() {
       />
 
       {/* Top Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <Link
             href="/admin/posts"
-            className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors"
+            className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors shrink-0"
             title="Quay lại bài viết"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
-              <Users className="w-6 h-6 text-blue-600" />
-              <span>Quản Lý Thành Viên & Cấp Quyền</span>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
+              <Users className="w-6 h-6 text-blue-600 shrink-0" />
+              <span className="truncate">Quản Lý Thành Viên &amp; Cấp Quyền</span>
             </h1>
-            <p className="text-xs text-stone-500">
-              Quản trị người dùng đăng nhập qua Google SSO: Phân quyền Admin (sửa bài, duyệt bài) & Member (chỉ viết bài, bình luận).
+            <p className="text-xs text-stone-500 truncate max-w-xl">
+              Phân quyền Admin (sửa bài, duyệt bài) &amp; Member (chỉ viết bài, bình luận).
             </p>
           </div>
         </div>

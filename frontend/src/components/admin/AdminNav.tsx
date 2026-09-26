@@ -24,14 +24,14 @@ export const AdminNav: React.FC<AdminNavProps> = ({
   const tabs: { key: AdminTab; label: string; href: string; icon: React.ComponentType<{ className?: string }>; adminOnly: boolean }[] = [
     {
       key: "posts",
-      label: "Quản lý bài viết",
+      label: "Bài viết",
       href: "/admin/posts",
       icon: FileText,
       adminOnly: true,
     },
     {
       key: "users",
-      label: "Quản lý thành viên",
+      label: "Thành viên",
       href: "/admin/users",
       icon: Users,
       adminOnly: true,
@@ -59,7 +59,7 @@ export const AdminNav: React.FC<AdminNavProps> = ({
     },
     {
       key: "logs",
-      label: "Nhật ký hệ thống",
+      label: "Nhật ký",
       href: "/admin/logs",
       icon: Activity,
       adminOnly: true,
@@ -67,41 +67,39 @@ export const AdminNav: React.FC<AdminNavProps> = ({
   ];
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 w-full sm:w-auto">
-      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        {tabs.map((tab) => {
-          if (tab.adminOnly && !isAdmin) return null;
+    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 overflow-x-auto no-scrollbar py-0.5 max-w-full">
+      {tabs.map((tab) => {
+        if (tab.adminOnly && !isAdmin) return null;
 
-          const isActive = currentTab === tab.key;
-          const Icon = tab.icon;
+        const isActive = currentTab === tab.key;
+        const Icon = tab.icon;
 
-          if (isActive) {
-            return (
-              <span
-                key={tab.key}
-                aria-current="page"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-300 dark:border-purple-800 bg-purple-100/90 dark:bg-purple-950/70 text-purple-800 dark:text-purple-200 text-xs font-bold shadow-xs cursor-default pointer-events-none select-none"
-              >
-                <Icon className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                <span>{tab.label}</span>
-              </span>
-            );
-          }
-
+        if (isActive) {
           return (
-            <Link
+            <span
               key={tab.key}
-              href={tab.href}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-semibold transition-colors ${
-                disabled ? "pointer-events-none opacity-50" : ""
-              }`}
+              aria-current="page"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-300 dark:border-purple-800 bg-purple-100/90 dark:bg-purple-950/70 text-purple-800 dark:text-purple-200 text-xs font-bold shadow-xs cursor-default pointer-events-none select-none shrink-0 whitespace-nowrap"
             >
-              <Icon className="w-3.5 h-3.5 text-stone-500" />
+              <Icon className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
               <span>{tab.label}</span>
-            </Link>
+            </span>
           );
-        })}
-      </div>
+        }
+
+        return (
+          <Link
+            key={tab.key}
+            href={tab.href}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-semibold transition-colors shrink-0 whitespace-nowrap ${
+              disabled ? "pointer-events-none opacity-50" : ""
+            }`}
+          >
+            <Icon className="w-3.5 h-3.5 text-stone-500" />
+            <span>{tab.label}</span>
+          </Link>
+        );
+      })}
 
       {actionButton && (
         <div className="shrink-0">

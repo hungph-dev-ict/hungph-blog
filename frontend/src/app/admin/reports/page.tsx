@@ -158,22 +158,22 @@ export default function AdminReportsPage() {
         />
 
         {/* Top Bar Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <Link
               href="/admin/posts"
-              className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors"
+              className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors shrink-0"
               title="Quay lại bài viết"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
-                <Flag className="w-6 h-6 text-rose-600" />
-                <span>Quản Lý Tố Cáo &amp; Vi Phạm</span>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                <Flag className="w-6 h-6 text-rose-600 shrink-0" />
+                <span className="truncate">Quản Lý Tố Cáo &amp; Vi Phạm</span>
               </h1>
-              <p className="text-xs text-stone-500">
-                Xét duyệt và xử lý các báo cáo vi phạm nội dung từ thành viên ({reports.length} báo cáo)
+              <p className="text-xs text-stone-500 truncate max-w-xl">
+                Xét duyệt và xử lý các báo cáo vi phạm ({reports.length} báo cáo)
                 {pendingCount > 0 && (
                   <span className="ml-2 font-bold text-rose-600 dark:text-rose-400">
                     • {pendingCount} báo cáo chờ xử lý
