@@ -461,18 +461,7 @@ function AdminSeriesContent() {
           </div>
         </div>
 
-        <AdminNav
-          currentTab="series"
-          actionButton={
-            <button
-              onClick={() => setShowNewSeriesModal(true)}
-              className="flex items-center gap-1 text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Tạo Series mới</span>
-            </button>
-          }
-        />
+        <AdminNav currentTab="series" />
       </div>
 
       {/* Modal Tạo Series Mới */}
@@ -833,8 +822,17 @@ function AdminSeriesContent() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left: Danh sách Series */}
         <div className="lg:col-span-6 space-y-4">
-          <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-            Các khóa học hiện có ({seriesList.length})
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+              Các khóa học hiện có ({seriesList.length})
+            </div>
+            <button
+              onClick={() => setShowNewSeriesModal(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tạo Series mới</span>
+            </button>
           </div>
 
           <div className="relative min-h-[300px]">

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Activity,
   Search,
@@ -20,17 +21,51 @@ import {
   X,
   Globe,
   Terminal,
+  ArrowLeft,
+  Lock,
+  Bot,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { getAuditLogs, getAuditStats } from "@/lib/api";
 import { AuditLog, AuditStats } from "@/lib/types";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { AdminGuard } from "@/components/admin/AdminGuard";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 
 const ACTION_CONFIG: Record<
   string,
   { label: string; color: string; icon: React.ComponentType<{ className?: string }> }
 > = {
+  AUTH_LOGIN_FAILED: {
+    label: "Đăng nhập thất bại",
+    color: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800",
+    icon: Lock,
+  },
+  ANONYMOUS_RAG_QUERY: {
+    label: "RAG Query (Khách)",
+    color: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-800",
+    icon: Bot,
+  },
+  ANONYMOUS_MUTATION: {
+    label: "Yêu cầu chưa đăng nhập",
+    color: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800",
+    icon: ShieldAlert,
+  },
+  ANONYMOUS_REQUEST: {
+    label: "Khách gửi Request",
+    color: "bg-stone-100 text-stone-700 border-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-700",
+    icon: Globe,
+  },
+  UNAUTHORIZED_ACCESS: {
+    label: "Truy cập trái phép (401)",
+    color: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800",
+    icon: Lock,
+  },
+  FORBIDDEN_ACCESS: {
+    label: "Không đủ quyền (403)",
+    color: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800",
+    icon: ShieldAlert,
+  },
   POST_CREATE: {
     label: "Đăng bài mới",
     color: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800",
@@ -148,48 +183,39 @@ export default function AdminAuditLogsPage() {
 
   const totalPages = Math.ceil(total / limit);
 
-  if (authLoading || (!user && !authLoading)) {
-    return <div className="p-8 text-center text-xs text-stone-400">Đang xác thực quyền truy cập...</div>;
-  }
-
   return (
-    <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Breadcrumbs */}
-      <Breadcrumbs
-        items={[
-          { label: "Trang chủ", href: "/" },
-          { label: "Quản trị", href: "/admin/posts" },
-          { label: "Nhật ký hệ thống & Điều tra" },
-        ]}
-      />
+    <AdminGuard requireAdmin={true}>
+      <div className="w-full space-y-6 pb-16">
+        <Breadcrumbs
+          items={[
+            { label: "Quản trị", href: "/admin/posts" },
+            { label: "Nhật ký hệ thống & Điều tra" },
+          ]}
+        />
 
-      {/* Header & Nav */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white flex items-center gap-2.5">
-              <Activity className="w-7 h-7 text-blue-600 dark:text-blue-400" />
-              <span>Nhật Ký Hoạt Động &amp; Điều Tra</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1">
-              Theo dõi toàn diện các sự kiện hệ thống: ai đăng bài, ai bình luận bài của ai, lịch sử truy cập và tố cáo.
-            </p>
+        {/* Top Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin/posts"
+              className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors"
+              title="Quay lại bài viết"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                <Activity className="w-6 h-6 text-blue-600" />
+                <span>Nhật Ký Hệ Thống &amp; Điều Tra</span>
+              </h1>
+              <p className="text-xs text-stone-500">
+                Ghi nhận toàn diện hoạt động, truy cập khách vãng lai, truy vấn RAG và cảnh báo vi phạm.
+              </p>
+            </div>
           </div>
-          <button
-            onClick={() => {
-              loadLogs();
-              loadStats();
-            }}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 text-xs font-semibold shadow-xs transition-colors self-start sm:self-auto cursor-pointer"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-blue-600" : ""}`} />
-            <span>Làm mới dữ liệu</span>
-          </button>
-        </div>
 
-        <AdminNav currentTab="logs" />
-      </div>
+          <AdminNav currentTab="logs" disabled={loading} />
+        </div>
 
       {/* Stats Cards */}
       {stats && (
@@ -264,18 +290,36 @@ export default function AdminAuditLogsPage() {
             className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
           >
             <option value="">Tất cả hành động ({total})</option>
-            <option value="COMMENT_CREATE">💬 Bình luận mới</option>
-            <option value="COMMENT_DELETE">🗑️ Thu hồi bình luận</option>
+            <option value="ANONYMOUS_MUTATION">⚠️ Yêu cầu chưa đăng nhập</option>
+            <option value="AUTH_LOGIN_FAILED">🚫 Đăng nhập thất bại</option>
+            <option value="ANONYMOUS_RAG_QUERY">🤖 RAG Query (Khách)</option>
+            <option value="UNAUTHORIZED_ACCESS">🔒 Truy cập trái phép (401)</option>
+            <option value="USER_LOGIN">🔑 Đăng nhập thành công</option>
             <option value="POST_CREATE">📝 Đăng bài mới</option>
             <option value="POST_UPDATE">✏️ Cập nhật bài viết</option>
             <option value="POST_PUBLISH">🚀 Xuất bản bài viết</option>
             <option value="POST_UNPUBLISH">📦 Chuyển về nháp</option>
             <option value="POST_DELETE">❌ Xóa bài viết</option>
+            <option value="COMMENT_CREATE">💬 Bình luận mới</option>
+            <option value="COMMENT_DELETE">🗑️ Thu hồi bình luận</option>
             <option value="POST_REPORT">🚩 Tố cáo vi phạm</option>
-            <option value="USER_LOGIN">🔑 Đăng nhập</option>
             <option value="USER_UPDATE_PROFILE">👤 Cập nhật hồ sơ</option>
           </select>
         </div>
+
+        {/* Refresh Button */}
+        <button
+          onClick={() => {
+            loadLogs();
+            loadStats();
+          }}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 text-xs font-semibold shadow-xs transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+          title="Làm mới dữ liệu"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-blue-600" : ""}`} />
+          <span>Làm mới</span>
+        </button>
       </div>
 
       {/* Table Logs */}
@@ -334,8 +378,15 @@ export default function AdminAuditLogsPage() {
 
                       {/* Actor */}
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <div className="font-semibold text-stone-900 dark:text-white">
-                          {log.actor_name || "Ẩn danh / Khách"}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-stone-900 dark:text-white">
+                            {log.actor_name || (log.user_id ? "Người dùng" : "Khách vãng lai")}
+                          </span>
+                          {!log.user_id && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-medium">
+                              Chưa đăng nhập
+                            </span>
+                          )}
                         </div>
                         {log.actor_email && (
                           <div className="text-[10px] text-stone-400 truncate max-w-[150px]">
@@ -521,6 +572,7 @@ export default function AdminAuditLogsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </AdminGuard>
   );
 }

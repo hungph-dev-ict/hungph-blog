@@ -25,6 +25,7 @@ import {
   RefreshCw,
   Camera,
   Image as ImageIcon,
+  ArrowLeft,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { fetchPosts, deletePost, updatePost, fetchCategories, getFullImageUrl } from "@/lib/api";
@@ -304,101 +305,108 @@ export default function AdminPostsPage() {
           ]}
         />
 
-        {/* Top Bar Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-6">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white">
-                {isAdmin ? "Quản Lý Bài Viết" : "Bài Viết Của Tôi"}
+        {/* Top Bar Header - Unified with Admin Users Layout */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/posts"
+              className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors"
+              title="Về trang đọc blog"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                <FileText className="w-6 h-6 text-blue-600" />
+                <span>{isAdmin ? "Quản Lý Bài Viết" : "Bài Viết Của Tôi"}</span>
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                    isAdmin
+                      ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                      : "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                  }`}
+                >
+                  {isAdmin ? "Admin" : "Thành viên"}
+                </span>
               </h1>
-              <span
-                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                  isAdmin
-                    ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
-                    : "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+              <p className="text-xs text-stone-500">
+                Toàn bộ hệ thống hiện có {posts.length} bài viết. Bạn có thể tìm kiếm, lọc, sửa bài và đổi ảnh bìa nhanh.
+              </p>
+            </div>
+          </div>
+
+          {/* Unified Admin Nav Tab Bar */}
+          <AdminNav currentTab="posts" disabled={isProcessing} />
+        </div>
+
+        {/* Search & Filter Controls Bar */}
+        <div className="p-4 rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/40 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+            {/* Search Box */}
+            <div className="lg:col-span-5 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+              <input
+                type="text"
+                disabled={isProcessing}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm kiếm theo tiêu đề, tác giả, danh mục..."
+                className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Status Filter */}
+            <div className="lg:col-span-2">
+              <select
+                disabled={isProcessing}
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value as any)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
+              >
+                <option value="all">Tất cả trạng thái</option>
+                <option value="published">Đã xuất bản</option>
+                <option value="draft">Bản nháp</option>
+              </select>
+            </div>
+
+            {/* Category Filter */}
+            <div className="lg:col-span-3">
+              <select
+                disabled={isProcessing}
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
+              >
+                <option value="">Tất cả danh mục</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.slug}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* New Post Button */}
+            <div className="lg:col-span-2">
+              <Link
+                href="/editor/new"
+                className={`w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all ${
+                  isProcessing ? "pointer-events-none opacity-50" : ""
                 }`}
               >
-                {isAdmin ? "Admin" : "Thành viên"}
-              </span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Viết bài mới</span>
+              </Link>
             </div>
-            <p className="text-xs sm:text-sm text-stone-500 mt-1">
-              Xin chào <span className="font-semibold text-blue-600">{user?.full_name || user?.username}</span>! {isAdmin ? "Toàn bộ hệ thống hiện có " : "Bạn đang có "}<span className="font-bold text-stone-900 dark:text-white">{posts.length}</span> bài viết.
-            </p>
           </div>
-
-        {/* Unified Admin Nav Tab Bar with Highlight and Disable on Active Tab */}
-        <AdminNav
-          currentTab="posts"
-          disabled={isProcessing}
-          actionButton={
-            <Link
-              href="/editor/new"
-              className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all ${
-                isProcessing ? "pointer-events-none opacity-50" : ""
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              <span>Viết bài mới</span>
-            </Link>
-          }
-        />
-      </div>
-
-      {/* Search & Filter Controls Bar */}
-      <div className="p-4 rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/40 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
-          {/* Search Box */}
-          <div className="lg:col-span-6 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
-            <input
-              type="text"
-              disabled={isProcessing}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm kiếm theo tiêu đề, tác giả, danh mục..."
-              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Status Filter */}
-          <div className="lg:col-span-3">
-            <select
-              disabled={isProcessing}
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as any)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
-            >
-              <option value="all">Tất cả trạng thái</option>
-              <option value="published">Đã xuất bản</option>
-              <option value="draft">Bản nháp</option>
-            </select>
-          </div>
-
-          {/* Category Filter */}
-          <div className="lg:col-span-3">
-            <select
-              disabled={isProcessing}
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
-            >
-              <option value="">Tất cả danh mục</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.slug}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
 
         {/* Results summary and Active Filters count */}
         <div className="flex items-center justify-between text-xs text-stone-500 pt-1 border-t border-stone-200/50 dark:border-stone-800/50">

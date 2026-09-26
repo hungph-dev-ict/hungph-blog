@@ -12,6 +12,7 @@ import {
   Check,
   X,
   FileText,
+  Layers,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -133,7 +134,7 @@ export default function AdminCategoriesPage() {
       />
 
       {/* Top Bar */}
-      <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
         <div className="flex items-center gap-3">
           <Link
             href="/admin/posts"
@@ -143,8 +144,9 @@ export default function AdminCategoriesPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-stone-900 dark:text-white">
-              Quản Lý Danh Mục
+            <h1 className="text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
+              <Layers className="w-6 h-6 text-blue-600" />
+              <span>Quản Lý Danh Mục</span>
             </h1>
             <p className="text-xs text-stone-500">
               Tạo và phân loại chủ đề cho bài viết và các khóa học

@@ -21,6 +21,7 @@ from app.modules.social.models import Follow, Notification  # registers tables
 from app.modules.social.router import router as social_router
 from app.modules.audit.models import AuditLog  # registers audit_logs table
 from app.modules.audit.router import router as audit_router
+from app.modules.audit.middleware import AuditLogMiddleware
 
 
 async def init_default_data():
@@ -562,6 +563,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Audit log middleware - Tự động ghi lại payload của request chưa đăng nhập & kiểm soát truy cập
+app.add_middleware(AuditLogMiddleware)
 
 
 @app.exception_handler(Exception)

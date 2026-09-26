@@ -47,6 +47,7 @@ async def login(credentials: UserLogin, request: Request, db: AsyncSession = Dep
             details={"login_method": "password", "username": user.username},
             request=request,
         )
+        request.state.audit_logged = True
     except Exception:
         pass
 
@@ -156,6 +157,7 @@ async def google_login(payload: GoogleAuthRequest, request: Request, db: AsyncSe
             details={"login_method": "google_oauth", "email": user.email},
             request=request,
         )
+        request.state.audit_logged = True
     except Exception:
         pass
 
@@ -228,6 +230,7 @@ async def update_my_profile(
             details={"has_bio": bool(current_user.bio), "has_avatar": bool(current_user.avatar_url)},
             request=request,
         )
+        request.state.audit_logged = True
     except Exception:
         pass
 
