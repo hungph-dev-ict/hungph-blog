@@ -180,7 +180,9 @@ async def list_posts(
         stmt = stmt.where(Post.author_id == author_id)
 
     if category:
-        stmt = stmt.join(Post.category).where(Category.slug == category)
+        stmt = stmt.join(Post.category).where(
+            or_(Category.slug == category, Category.id == category, Category.name == category)
+        )
 
     if tag:
         stmt = stmt.join(Post.tags).where(Tag.slug == tag)
@@ -208,7 +210,9 @@ async def list_posts(
     if author_id:
         count_stmt = count_stmt.where(Post.author_id == author_id)
     if category:
-        count_stmt = count_stmt.join(Post.category).where(Category.slug == category)
+        count_stmt = count_stmt.join(Post.category).where(
+            or_(Category.slug == category, Category.id == category, Category.name == category)
+        )
     if tag:
         count_stmt = count_stmt.join(Post.tags).where(Tag.slug == tag)
     if series_id:

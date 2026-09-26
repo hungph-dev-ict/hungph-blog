@@ -470,14 +470,19 @@ function RAGShowcaseSection() {
 // Home Content Inner Component
 // ──────────────────────────────────────────────────────────────
 function HomeContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const initialCategory = searchParams?.get("category") || "";
+  const initialTag = searchParams?.get("tag") || "";
+  const initialSearch = searchParams?.get("search") || "";
+
   const [postsData, setPostsData] = useState<PaginatedPosts | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [latestSeries, setLatestSeries] = useState<Series | null>(null);
   const [spotlightPost, setSpotlightPost] = useState<PostListItem | null>(null);
   const [spotlightLoaded, setSpotlightLoaded] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
+  const [searchQuery, setSearchQuery] = useState<string>(initialTag || initialSearch);
   const [searchPlaceholder, setSearchPlaceholder] = useState<string>("Tìm kiếm...");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
@@ -499,11 +504,33 @@ function HomeContent() {
     return () => window.removeEventListener("resize", updatePlaceholder);
   }, []);
 
-  // Read URL tag param if present
+  // Sync state from URL query parameters (category, tag, search)
   useEffect(() => {
+    const urlCategory = searchParams?.get("category") || "";
     const urlTag = searchParams?.get("tag");
-    if (urlTag) {
-      setSearchQuery(urlTag);
+    const urlSearch = searchParams?.get("search");
+
+    let changed = false;
+    if (urlCategory !== selectedCategory) {
+      setSelectedCategory(urlCategory);
+      changed = true;
+    }
+
+    const queryTarget = urlTag !== null ? urlTag : (urlSearch !== null ? urlSearch : null);
+    if (queryTarget !== null && queryTarget !== searchQuery) {
+      setSearchQuery(queryTarget);
+      changed = true;
+    }
+
+    if (changed) {
+      setCurrentPage(1);
+    }
+
+    // Smooth scroll to articles feed if arriving with category or search/tag filter
+    if (urlCategory || urlTag || urlSearch) {
+      setTimeout(() => {
+        document.getElementById("articles-feed")?.scrollIntoView({ behavior: "smooth" });
+      }, 350);
     }
   }, [searchParams]);
 
@@ -581,6 +608,16 @@ function HomeContent() {
     if (selectedCategory === catSlug) return;
     setSelectedCategory(catSlug);
     setCurrentPage(1);
+
+    const params = new URLSearchParams(searchParams ? searchParams.toString() : "");
+    if (catSlug) {
+      params.set("category", catSlug);
+    } else {
+      params.delete("category");
+    }
+    params.delete("page");
+    const qs = params.toString();
+    router.push(qs ? `/?${qs}` : "/", { scroll: false });
   };
 
   const handlePageChange = (newPage: number) => {
@@ -591,12 +628,32 @@ function HomeContent() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1);
+
+    const params = new URLSearchParams(searchParams ? searchParams.toString() : "");
+    if (searchQuery.trim()) {
+      params.set("search", searchQuery.trim());
+    } else {
+      params.delete("search");
+    }
+    params.delete("tag");
+    params.delete("page");
+    const qs = params.toString();
+    router.push(qs ? `/?${qs}` : "/", { scroll: false });
+
     loadPosts(1, selectedCategory, searchQuery, "Đang tìm kiếm bài viết...");
   };
 
   const handleQuickTagClick = (tag: string) => {
     setSearchQuery(tag);
     setCurrentPage(1);
+
+    const params = new URLSearchParams(searchParams ? searchParams.toString() : "");
+    params.set("tag", tag);
+    params.delete("search");
+    params.delete("page");
+    const qs = params.toString();
+    router.push(qs ? `/?${qs}` : "/", { scroll: false });
+
     loadPosts(1, selectedCategory, tag, `Đang lọc theo chủ đề "${tag}"...`);
   };
 
@@ -874,7 +931,7 @@ function HomeContent() {
       {/* ══════════════════════════════════════════════════════════════ */}
       {/* 4. ARTICLES FEED (HEADLINE HERO + FEED CARDS)                 */}
       {/* ══════════════════════════════════════════════════════════════ */}
-      <section className="space-y-6">
+      <section id="articles-feed" className="space-y-6 scroll-mt-20">
         <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-3">
           <div className="flex items-center gap-2 text-sm font-bold text-stone-900 dark:text-white">
             <PenLine className="w-4 h-4 text-blue-600 dark:text-cyan-400" />
