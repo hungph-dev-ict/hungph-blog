@@ -143,11 +143,19 @@ export default function NotificationsPage() {
                   )}
                   {n.target_id && n.target_type === "post" && (
                     <Link
-                      href={`/posts/${n.target_id}#comments`}
+                      href={
+                        n.type === "new_comment" || n.type === "new_comment_reply"
+                          ? `/posts/${n.target_id}#comments`
+                          : `/posts/${n.target_id}`
+                      }
                       className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-1.5 inline-flex items-center gap-1"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <span>Xem bài viết và bình luận →</span>
+                      <span>
+                        {n.type === "new_comment" || n.type === "new_comment_reply"
+                          ? "Xem bài viết và bình luận →"
+                          : "Đọc bài viết mới →"}
+                      </span>
                     </Link>
                   )}
                   <p className="text-xs text-stone-400 mt-1">{new Date(n.created_at).toLocaleString("vi-VN")}</p>

@@ -287,7 +287,7 @@ async def get_post_by_slug(
 ):
     stmt = (
         select(Post)
-        .where(Post.slug == slug)
+        .where((Post.slug == slug) | (Post.id == slug))
         .options(
             selectinload(Post.category),
             selectinload(Post.tags),
@@ -580,7 +580,7 @@ async def notify_followers_new_post(db: AsyncSession, post: Post, author: User):
                 user_id=fid,
                 actor_id=author.id,
                 type="new_post",
-                target_id=post.id,
+                target_id=post.slug or post.id,
                 target_type="post",
                 message=f"{author_name} vừa đăng bài viết mới: '{post.title}'"
             ))

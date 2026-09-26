@@ -64,8 +64,21 @@ async def init_default_data():
             async with engine.begin() as conn:
                 await conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN target_id TYPE VARCHAR(255);"))
                 await conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN summary TYPE TEXT;"))
+                await conn.execute(text("ALTER TABLE notifications ALTER COLUMN target_id TYPE VARCHAR(255);"))
         except Exception:
             pass
+
+    # Đồng bộ các notification cũ đang lưu post.id thành post.slug để click mở bài viết không bị 404
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("""
+                UPDATE notifications
+                SET target_id = (SELECT slug FROM posts WHERE posts.id = notifications.target_id)
+                WHERE target_type = 'post'
+                  AND EXISTS (SELECT 1 FROM posts WHERE posts.id = notifications.target_id);
+            """))
+    except Exception:
+        pass
 
     async with AsyncSessionLocal() as db:
         # Kiểm tra Admin

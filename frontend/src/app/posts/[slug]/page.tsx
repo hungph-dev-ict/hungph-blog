@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { fetchPostBySlug, fetchPosts, getFullImageUrl } from "@/lib/api";
 import { PostDetailClient } from "@/components/blog/PostDetailClient";
 
@@ -112,6 +112,11 @@ export default async function PostDetailPage({ params }: Props) {
 
   if (!post) {
     notFound();
+  }
+
+  // Nếu người dùng truy cập bằng Post ID (UUID) thay vì slug, tự động chuyển hướng về URL chuẩn có slug
+  if (post.slug && slug !== post.slug) {
+    redirect(`/posts/${post.slug}`);
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://hungph-blog.vercel.app";

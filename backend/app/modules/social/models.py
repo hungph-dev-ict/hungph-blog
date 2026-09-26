@@ -29,8 +29,8 @@ class Notification(Base):
     # Loại thông báo
     # collab_request | collab_accepted | collab_rejected | new_follower | new_post
     type = Column(String(50), nullable=False)
-    # ID đối tượng liên quan (series_id, post_id, ...)
-    target_id = Column(String(36), nullable=True)
+    # ID hoặc slug đối tượng liên quan (series_id, post_slug, ...)
+    target_id = Column(String(255), nullable=True)
     target_type = Column(String(30), nullable=True)  # "series" | "post"
     # Nội dung thông báo
     message = Column(String(500), nullable=True)
