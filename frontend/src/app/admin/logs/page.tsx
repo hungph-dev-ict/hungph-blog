@@ -41,9 +41,24 @@ const ACTION_CONFIG: Record<
     color: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800",
     icon: Lock,
   },
+  RAG_QUERY: {
+    label: "Truy vấn AI RAG",
+    color: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-800",
+    icon: Bot,
+  },
   ANONYMOUS_RAG_QUERY: {
     label: "RAG Query (Khách)",
-    color: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-800",
+    color: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800",
+    icon: Bot,
+  },
+  RAG_QUERY_FAILED: {
+    label: "RAG Thất bại",
+    color: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800",
+    icon: Bot,
+  },
+  RAG_REBUILD_INDEX: {
+    label: "Tái tạo RAG Index",
+    color: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-800",
     icon: Bot,
   },
   ANONYMOUS_MUTATION: {
@@ -290,9 +305,11 @@ export default function AdminAuditLogsPage() {
             className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
           >
             <option value="">Tất cả hành động ({total})</option>
+            <option value="RAG_QUERY">🤖 Truy vấn AI RAG (Thành viên)</option>
+            <option value="ANONYMOUS_RAG_QUERY">🤖 RAG Query (Khách vãng lai)</option>
+            <option value="RAG_REBUILD_INDEX">⚙️ Tái tạo RAG Index</option>
             <option value="ANONYMOUS_MUTATION">⚠️ Yêu cầu chưa đăng nhập</option>
             <option value="AUTH_LOGIN_FAILED">🚫 Đăng nhập thất bại</option>
-            <option value="ANONYMOUS_RAG_QUERY">🤖 RAG Query (Khách)</option>
             <option value="UNAUTHORIZED_ACCESS">🔒 Truy cập trái phép (401)</option>
             <option value="USER_LOGIN">🔑 Đăng nhập thành công</option>
             <option value="POST_CREATE">📝 Đăng bài mới</option>

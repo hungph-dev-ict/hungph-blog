@@ -3,15 +3,16 @@ RAG Router — Real implementation với Gemini + FAISS
 """
 import asyncio
 import logging
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.modules.auth.deps import get_current_admin
+from app.modules.auth.deps import get_current_admin, get_optional_user
 from app.modules.auth.models import User
+from app.modules.audit.service import record_audit_log
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ async def rag_status():
 @router.post("/index", response_model=IndexResponse)
 async def rebuild_index(
     background_tasks: BackgroundTasks,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
@@ -122,6 +124,19 @@ async def rebuild_index(
         for p in posts
     ]
 
+    # Ghi nhận audit log cho thao tác rebuild index
+    request.state.audit_logged = True
+    await record_audit_log(
+        db=db,
+        action="RAG_REBUILD_INDEX",
+        summary=f"Quản trị viên '{admin.username}' kích hoạt tạo lại Vector Index cho {len(posts)} bài viết",
+        user=admin,
+        target_type="rag",
+        target_title=f"{len(posts)} bài viết",
+        details={"num_posts": len(posts)},
+        request=request,
+    )
+
     # Chạy index trong background
     def _run_index():
         from app.modules.rag.service import build_index_from_posts
@@ -142,13 +157,43 @@ async def rebuild_index(
 
 
 @router.post("/query", response_model=RAGResponse)
-async def query_rag(req: RAGQueryRequest, db: AsyncSession = Depends(get_db)):
+async def query_rag(
+    req: RAGQueryRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
     """
     RAG Q&A — Tìm kiếm ngữ nghĩa + Gemini trả lời.
+    Kiểm soát và ghi nhật ký hệ thống toàn bộ người dùng (thành viên hoặc khách vãng lai).
     """
+    # Đánh dấu để middleware không ghi log trùng lặp
+    request.state.audit_logged = True
+
+    actor_name = "Khách vãng lai"
+    actor_email = None
+    action = "ANONYMOUS_RAG_QUERY"
+
+    if current_user:
+        actor_name = current_user.full_name or current_user.username
+        actor_email = current_user.email
+        action = "RAG_QUERY"
+
     from app.core.config import settings
 
     if not settings.GEMINI_API_KEY:
+        await record_audit_log(
+            db=db,
+            action="RAG_QUERY_FAILED",
+            summary=f"RAG thất bại (Chưa cấu hình GEMINI_API_KEY): \"{req.query}\"",
+            user=current_user,
+            actor_name=actor_name,
+            actor_email=actor_email,
+            target_type="rag",
+            target_title=req.query[:255],
+            details={"query": req.query, "error": "Missing GEMINI_API_KEY"},
+            request=request,
+        )
         raise HTTPException(
             status_code=503,
             detail="Hệ thống RAG chưa được cấu hình khóa GEMINI_API_KEY trên server backend."
@@ -158,6 +203,18 @@ async def query_rag(req: RAGQueryRequest, db: AsyncSession = Depends(get_db)):
         from app.modules.rag.service import search_similar, generate_answer, FAISS_INDEX_PATH
     except ImportError as e:
         logger.error(f"RAG import error: {e}")
+        await record_audit_log(
+            db=db,
+            action="RAG_QUERY_FAILED",
+            summary=f"RAG thất bại (Lỗi thư viện AI): \"{req.query}\"",
+            user=current_user,
+            actor_name=actor_name,
+            actor_email=actor_email,
+            target_type="rag",
+            target_title=req.query[:255],
+            details={"query": req.query, "error": str(e)},
+            request=request,
+        )
         raise HTTPException(
             status_code=503,
             detail=f"Thư viện AI trên server đang cập nhật ({str(e)}). Vui lòng thử lại sau vài phút."
@@ -204,6 +261,41 @@ async def query_rag(req: RAGQueryRequest, db: AsyncSession = Depends(get_db)):
             for chunk in similar_chunks
         ]
 
+        # Ghi nhật ký hệ thống chi tiết cho truy vấn RAG
+        summary_text = (
+            f"'{actor_name}' tìm kiếm RAG AI: \"{req.query}\" ({len(sources)} tài liệu liên quan)"
+            if current_user
+            else f"Khách vãng lai tìm kiếm RAG AI: \"{req.query}\" ({len(sources)} tài liệu liên quan)"
+        )
+
+        await record_audit_log(
+            db=db,
+            action=action,
+            summary=summary_text,
+            user=current_user,
+            actor_name=actor_name,
+            actor_email=actor_email,
+            target_type="rag",
+            target_title=req.query[:255],
+            details={
+                "query": req.query,
+                "top_k": req.top_k,
+                "sources_count": len(sources),
+                "sources": [
+                    {
+                        "title": s.title,
+                        "slug": s.slug,
+                        "similarity_score": s.similarity_score,
+                        "snippet": s.snippet[:200]
+                    }
+                    for s in sources
+                ],
+                "answer_preview": answer[:300] + ("..." if len(answer) > 300 else ""),
+                "model": "gemini-2.5-flash + gemini-embedding-001",
+            },
+            request=request,
+        )
+
         return RAGResponse(
             answer=answer,
             sources=sources,
@@ -211,7 +303,31 @@ async def query_rag(req: RAGQueryRequest, db: AsyncSession = Depends(get_db)):
         )
 
     except ValueError as e:
+        await record_audit_log(
+            db=db,
+            action="RAG_QUERY_FAILED",
+            summary=f"RAG thất bại (ValueError): \"{req.query}\" - {str(e)}",
+            user=current_user,
+            actor_name=actor_name,
+            actor_email=actor_email,
+            target_type="rag",
+            target_title=req.query[:255],
+            details={"query": req.query, "error": str(e)},
+            request=request,
+        )
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"RAG query error: {e}", exc_info=True)
+        await record_audit_log(
+            db=db,
+            action="RAG_QUERY_FAILED",
+            summary=f"RAG lỗi hệ thống: \"{req.query}\" - {str(e)}",
+            user=current_user,
+            actor_name=actor_name,
+            actor_email=actor_email,
+            target_type="rag",
+            target_title=req.query[:255],
+            details={"query": req.query, "error": str(e)},
+            request=request,
+        )
         raise HTTPException(status_code=500, detail=f"Lỗi xử lý RAG: {str(e)}")

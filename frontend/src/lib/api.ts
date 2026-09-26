@@ -466,14 +466,22 @@ export async function getRAGStatus(): Promise<{
   return res.json();
 }
 
-export async function queryRAG(query: string, top_k = 5): Promise<{
+export async function queryRAG(
+  query: string,
+  top_k = 5,
+  token?: string
+): Promise<{
   answer: string;
   sources: Array<{ title: string; slug: string; similarity_score: number; snippet: string }>;
   model?: string;
 }> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
   const res = await fetch(`${API_BASE_URL}/rag/query`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ query, top_k }),
   });
   if (!res.ok) {

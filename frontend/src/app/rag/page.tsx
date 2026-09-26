@@ -75,7 +75,7 @@ function RAGContent() {
     setResult(null);
 
     try {
-      const data = await queryRAG(q);
+      const data = await queryRAG(q, 5, token || undefined);
       setResult(data);
     } catch (err: any) {
       alert(`Lỗi kết nối RAG: ${err.message}`);
