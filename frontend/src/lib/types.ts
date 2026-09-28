@@ -258,4 +258,31 @@ export interface AuditStats {
   total_reports: number;
 }
 
+// ── Glossary / Thuật ngữ ────────────────────────────────────
+
+export interface GlossaryTerm {
+  id: string;
+  term: string;
+  definition: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GlossaryTermCreatePayload {
+  term: string;
+  definition: string;
+}
+
+export interface GlossaryTermUpdatePayload {
+  term?: string;
+  definition?: string;
+}
+
+// ── Bookmark / Đánh dấu bài viết ────────────────────────────
+
+export interface BookmarkStatus {
+  bookmarked: boolean;
+  bookmarks_count: number;
+}
+
 

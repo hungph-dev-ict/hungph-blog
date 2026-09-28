@@ -30,9 +30,9 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { fetchPosts, deletePost, updatePost, fetchCategories, getFullImageUrl } from "@/lib/api";
 import { Category, PostListItem } from "@/lib/types";
-import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminGuard } from "@/components/admin/AdminGuard";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Pagination } from "@/components/common/Pagination";
 import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 import { EditCoverModal } from "@/components/blog/EditCoverModal";
@@ -298,46 +298,21 @@ export default function AdminPostsPage() {
   return (
     <AdminGuard requireAdmin={true}>
       <div className="w-full space-y-6 pb-16">
-        <Breadcrumbs
-          items={[
+        <AdminPageHeader
+          currentTab="posts"
+          breadcrumbs={[
             { label: "Quản trị", href: "/admin/posts" },
             { label: "Quản lý bài viết" },
           ]}
+          title={isAdmin ? "Quản Lý Bài Viết" : "Bài Viết Của Tôi"}
+          description={`Toàn bộ hệ thống hiện có ${posts.length} bài viết. Tìm kiếm, lọc và sửa bài.`}
+          icon={FileText}
+          backHref="/posts"
+          backTitle="Về trang đọc blog"
+          badgeText={isAdmin ? "Admin" : "Thành viên"}
+          badgeVariant={isAdmin ? "purple" : "member"}
+          disabled={isProcessing}
         />
-
-        {/* Top Bar Header - Unified with Admin Users Layout */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Link
-              href="/posts"
-              className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors shrink-0"
-              title="Về trang đọc blog"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
-                <FileText className="w-6 h-6 text-blue-600 shrink-0" />
-                <span className="truncate">{isAdmin ? "Quản Lý Bài Viết" : "Bài Viết Của Tôi"}</span>
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
-                    isAdmin
-                      ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
-                      : "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-                  }`}
-                >
-                  {isAdmin ? "Admin" : "Thành viên"}
-                </span>
-              </h1>
-              <p className="text-xs text-stone-500 truncate max-w-xl">
-                Toàn bộ hệ thống hiện có {posts.length} bài viết. Tìm kiếm, lọc và sửa bài.
-              </p>
-            </div>
-          </div>
-
-          {/* Unified Admin Nav Tab Bar */}
-          <AdminNav currentTab="posts" disabled={isProcessing} />
-        </div>
 
         {/* Search & Filter Controls Bar */}
         <div className="p-4 rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/40 space-y-3">

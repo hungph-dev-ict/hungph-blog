@@ -97,7 +97,8 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
       const href = target.getAttribute("href");
       if (!href) return;
 
-      // Bỏ qua nếu: mở tab mới, phím tắt, link tải, link neo tại chỗ (#), link email/tel
+      // Bỏ qua nếu: mở tab mới, phím tắt, link tải, link neo tại chỗ (#), link email/tel,
+      // hoặc sự kiện đã bị chặn, hoặc trang đang có form chưa lưu (data-editor-dirty)
       if (
         target.target === "_blank" ||
         target.hasAttribute("download") ||
@@ -107,7 +108,11 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
         e.ctrlKey ||
         e.metaKey ||
         e.shiftKey ||
-        e.altKey
+        e.altKey ||
+        e.defaultPrevented ||
+        target.getAttribute("data-no-loading") === "true" ||
+        Boolean(target.closest("[data-no-loading='true']")) ||
+        document.body.getAttribute("data-editor-dirty") === "true"
       ) {
         return;
       }
@@ -143,6 +148,10 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     const handlePopState = () => {
+      // Nếu trang đang có thay đổi chưa lưu, không hiện loading tự động để modal xác nhận xử lý
+      if (document.body.getAttribute("data-editor-dirty") === "true") {
+        return;
+      }
       showLoading("Đang chuyển trang...");
     };
 

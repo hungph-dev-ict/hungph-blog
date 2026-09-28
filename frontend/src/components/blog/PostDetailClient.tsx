@@ -19,6 +19,7 @@ import {
   ChevronUp,
   BookOpen,
   Heart,
+  Bookmark,
   Flag,
   X,
   ShieldCheck,
@@ -26,11 +27,12 @@ import {
   Copy,
   Link2,
 } from "lucide-react";
-import { getFullImageUrl, getLikeStatus, toggleLike, reportPost, fetchLinkMetadata } from "@/lib/api";
-import { PostDetail, REPORT_REASONS } from "@/lib/types";
+import { getFullImageUrl, getLikeStatus, toggleLike, getBookmarkStatus, toggleBookmark, reportPost, fetchLinkMetadata, fetchGlossaryTerms } from "@/lib/api";
+import { PostDetail, REPORT_REASONS, GlossaryTerm } from "@/lib/types";
 import { TableOfContents } from "@/components/blog/TableOfContents";
 import { ReadingProgressBar } from "@/components/blog/ReadingProgressBar";
 import { CommentSection } from "@/components/blog/CommentSection";
+import { GlossaryTooltip } from "@/components/blog/GlossaryTooltip";
 import { useAuth } from "@/lib/auth-context";
 
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
@@ -49,12 +51,25 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
   const [liked, setLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
   const [likeLoading, setLikeLoading] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
+  const [bookmarksCount, setBookmarksCount] = useState(0);
+  const [bookmarkLoading, setBookmarkLoading] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reportDesc, setReportDesc] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [reportDone, setReportDone] = useState(false);
+
+  // Thuật ngữ (Glossary) & ref nội dung bài viết
+  const [glossaryTerms, setGlossaryTerms] = useState<GlossaryTerm[]>([]);
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    fetchGlossaryTerms()
+      .then((terms) => setGlossaryTerms(terms))
+      .catch((err) => console.error("Lỗi khi tải thuật ngữ bài viết:", err));
+  }, []);
 
   // Quyền chỉnh sửa: Admin hoặc chính tác giả bài viết
   const isAdmin = Boolean(user && (user.is_admin || user.role === "admin"));
@@ -185,6 +200,15 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
         }
       })
       .catch(() => {});
+
+    getBookmarkStatus(post.id, token || undefined)
+      .then((s) => {
+        setBookmarked(s.bookmarked);
+        if (s.bookmarks_count !== undefined) {
+          setBookmarksCount(s.bookmarks_count);
+        }
+      })
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id, token]);
 
@@ -198,6 +222,21 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
       setLikesCount(result.likes_count);
     } finally {
       setLikeLoading(false);
+    }
+  };
+
+  const handleBookmark = async () => {
+    if (!user || !token) { alert("Vui lòng đăng nhập để lưu bài viết"); return; }
+    if (bookmarkLoading) return;
+    setBookmarkLoading(true);
+    try {
+      const result = await toggleBookmark(post.id, token);
+      setBookmarked(result.bookmarked);
+      setBookmarksCount(result.bookmarks_count);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Lỗi khi lưu bài viết");
+    } finally {
+      setBookmarkLoading(false);
     }
   };
 
@@ -336,7 +375,7 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
           </h1>
 
           {post.summary && (
-            <p className="text-lg text-stone-600 dark:text-stone-300 leading-relaxed italic border-l-2 border-blue-500 pl-4">
+            <p className="text-lg text-stone-600 dark:text-stone-300 leading-relaxed italic border-l-2 border-blue-500 pl-4 whitespace-pre-line">
               {post.summary}
             </p>
           )}
@@ -422,6 +461,22 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                 <Heart className={`w-4 h-4 sm:w-3.5 sm:h-3.5 transition-transform ${liked ? "fill-rose-500 scale-110" : ""}`} />
                 <span className="hidden sm:inline">{liked ? "Đã thích" : "Thích"}</span>
                 {likesCount > 0 && <span className="font-bold text-[11px] sm:text-xs leading-none">{likesCount}</span>}
+              </button>
+
+              {/* Bookmark Button */}
+              <button
+                onClick={handleBookmark}
+                title={bookmarked ? "Bỏ lưu bài viết" : "Lưu bài viết"}
+                aria-label={bookmarked ? "Bỏ lưu bài viết" : "Lưu bài viết"}
+                className={`flex items-center justify-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-medium transition-all ${
+                  bookmarked
+                    ? "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400"
+                    : "border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:border-amber-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/20"
+                }`}
+              >
+                <Bookmark className={`w-4 h-4 sm:w-3.5 sm:h-3.5 transition-transform ${bookmarked ? "fill-amber-500 scale-110" : ""}`} />
+                <span className="hidden sm:inline">{bookmarked ? "Đã lưu" : "Lưu"}</span>
+                {bookmarksCount > 0 && <span className="font-bold text-[11px] sm:text-xs leading-none">{bookmarksCount}</span>}
               </button>
 
               {/* Report Button */}
@@ -864,9 +919,13 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                 )}
 
                 <div
+                  ref={contentRef}
                   className="blog-content leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: processedContentHtml }}
                 />
+
+                {/* Tra cứu & Highlight Thuật ngữ tự động */}
+                <GlossaryTooltip terms={glossaryTerms} containerRef={contentRef} />
 
                 {/* Course Attribution & Copyright Notice */}
                 {Boolean(post.series_outline?.attribution_text?.trim()) && (

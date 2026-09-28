@@ -30,7 +30,7 @@ import { getAuditLogs, getAuditStats } from "@/lib/api";
 import { AuditLog, AuditStats } from "@/lib/types";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminGuard } from "@/components/admin/AdminGuard";
-import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 
 const ACTION_CONFIG: Record<
   string,
@@ -201,36 +201,19 @@ export default function AdminAuditLogsPage() {
   return (
     <AdminGuard requireAdmin={true}>
       <div className="w-full space-y-6 pb-16">
-        <Breadcrumbs
-          items={[
+        <AdminPageHeader
+          currentTab="logs"
+          breadcrumbs={[
             { label: "Quản trị", href: "/admin/posts" },
             { label: "Nhật ký hệ thống & Điều tra" },
           ]}
+          title="Nhật Ký Hệ Thống & Điều Tra"
+          description="Ghi nhận hoạt động, truy cập vãng lai, truy vấn RAG và cảnh báo vi phạm."
+          icon={Activity}
+          backHref="/admin/posts"
+          backTitle="Quay lại bài viết"
+          disabled={loading}
         />
-
-        {/* Top Bar */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Link
-              href="/admin/posts"
-              className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors shrink-0"
-              title="Quay lại bài viết"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
-                <Activity className="w-6 h-6 text-blue-600 shrink-0" />
-                <span className="truncate">Nhật Ký Hệ Thống &amp; Điều Tra</span>
-              </h1>
-              <p className="text-xs text-stone-500 truncate max-w-xl">
-                Ghi nhận hoạt động, truy cập vãng lai, truy vấn RAG và cảnh báo vi phạm.
-              </p>
-            </div>
-          </div>
-
-          <AdminNav currentTab="logs" disabled={loading} />
-        </div>
 
       {/* Stats Cards */}
       {stats && (

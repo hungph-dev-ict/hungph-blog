@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.modules.auth.deps import get_current_admin, get_current_user, get_optional_user
 from app.modules.auth.models import User
-from app.modules.blog.models import Category, Chapter, Comment, Post, PostLike, PostReport, Series, SeriesCollaborator, Tag, post_tags
+from app.modules.blog.models import Category, Chapter, Comment, Post, PostLike, PostBookmark, PostReport, Series, SeriesCollaborator, Tag, post_tags
 from app.modules.social.models import Follow, Notification
 from app.modules.audit.service import record_audit_log
 from app.modules.blog.schemas import (
@@ -2086,6 +2086,97 @@ async def get_like_status(
         select(func.count()).where(PostLike.post_id == post_id)
     )).scalar() or 0
     return LikeStatusResponse(liked=liked, likes_count=likes_count)
+
+
+# ══════════════════════════════════════════════════════════════
+# POST BOOKMARKS
+# ══════════════════════════════════════════════════════════════
+
+class BookmarkStatusResponse(PydanticBase):
+    bookmarked: bool
+    bookmarks_count: int
+
+
+@router.post("/posts/{post_id}/bookmark", response_model=BookmarkStatusResponse)
+async def toggle_bookmark(
+    post_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    post = (await db.execute(select(Post).where(Post.id == post_id))).scalar_one_or_none()
+    if not post:
+        raise HTTPException(status_code=404, detail="Bài viết không tồn tại")
+
+    existing = (await db.execute(
+        select(PostBookmark).where(PostBookmark.post_id == post_id, PostBookmark.user_id == current_user.id)
+    )).scalar_one_or_none()
+
+    if existing:
+        await db.delete(existing)
+        bookmarked = False
+    else:
+        db.add(PostBookmark(post_id=post_id, user_id=current_user.id))
+        bookmarked = True
+
+    await db.commit()
+    bookmarks_count = (await db.execute(
+        select(func.count()).where(PostBookmark.post_id == post_id)
+    )).scalar() or 0
+    return BookmarkStatusResponse(bookmarked=bookmarked, bookmarks_count=bookmarks_count)
+
+
+@router.get("/posts/{post_id}/bookmark-status", response_model=BookmarkStatusResponse)
+async def get_bookmark_status(
+    post_id: str,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    bookmarked = False
+    if current_user:
+        bookmarked = (await db.execute(
+            select(PostBookmark).where(PostBookmark.post_id == post_id, PostBookmark.user_id == current_user.id)
+        )).scalar_one_or_none() is not None
+
+    bookmarks_count = (await db.execute(
+        select(func.count()).where(PostBookmark.post_id == post_id)
+    )).scalar() or 0
+    return BookmarkStatusResponse(bookmarked=bookmarked, bookmarks_count=bookmarks_count)
+
+
+@router.get("/users/{username}/bookmarks", response_model=List[PostListItem])
+async def get_user_bookmarked_posts(
+    username: str,
+    db: AsyncSession = Depends(get_db),
+    optional_user: Optional[User] = Depends(get_optional_user),
+):
+    """Lấy danh sách các bài viết mà người dùng đã bookmark / lưu lại."""
+    target_user = (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
+
+    stmt = (
+        select(Post)
+        .join(PostBookmark, PostBookmark.post_id == Post.id)
+        .where(PostBookmark.user_id == target_user.id)
+        .options(
+            selectinload(Post.category),
+            selectinload(Post.tags),
+            selectinload(Post.author),
+            selectinload(Post.series),
+            selectinload(Post.chapter),
+            selectinload(Post.likes),
+        )
+        .order_by(desc(PostBookmark.created_at))
+    )
+
+    is_self = bool(optional_user and optional_user.id == target_user.id)
+    is_admin = bool(optional_user and (optional_user.is_admin or getattr(optional_user, "role", "") == "admin"))
+    if not (is_self or is_admin):
+        stmt = stmt.where(Post.is_published == True)
+
+    result = await db.execute(stmt)
+    posts = result.scalars().all()
+    return posts
 
 
 # ══════════════════════════════════════════════════════════════

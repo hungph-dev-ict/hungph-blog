@@ -35,9 +35,9 @@ import {
   getCollaborators,
 } from "@/lib/api";
 import { Category, Chapter, Series, SeriesDetail, User } from "@/lib/types";
-import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminGuard } from "@/components/admin/AdminGuard";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { HierarchyConfigEditor } from "@/components/series/HierarchyConfigEditor";
 import { ChapterNode, buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
 import { useLoading } from "@/lib/loading-context";
@@ -433,36 +433,18 @@ function AdminSeriesContent() {
 
   return (
     <div className="w-full space-y-6 pb-16">
-      <Breadcrumbs
-        items={[
+      <AdminPageHeader
+        currentTab="series"
+        breadcrumbs={[
           { label: "Quản trị", href: "/admin/posts" },
           { label: "Series" },
         ]}
+        title="Quản Lý Series"
+        description="Thiết kế các bài viết theo dạng phân cấp từng chương, từng bài như sách hoặc series chuyên đề"
+        icon={GraduationCap}
+        backHref="/admin/posts"
+        backTitle="Quay lại bài viết"
       />
-
-      {/* Top Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <Link
-            href="/admin/posts"
-            className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors shrink-0"
-            title="Quay lại bài viết"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
-              <GraduationCap className="w-6 h-6 text-blue-600 shrink-0" />
-              <span className="truncate">Quản Lý Series</span>
-            </h1>
-            <p className="text-xs text-stone-500 truncate max-w-xl">
-              Thiết kế các bài viết theo dạng phân cấp từng chương, từng bài như sách hoặc series chuyên đề
-            </p>
-          </div>
-        </div>
-
-        <AdminNav currentTab="series" />
-      </div>
 
       {/* Modal Tạo Series Mới */}
       {showNewSeriesModal && (

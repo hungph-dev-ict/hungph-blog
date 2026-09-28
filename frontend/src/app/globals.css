@@ -322,3 +322,32 @@
   line-height: 1.5;
 }
 
+/* Glossary / Thuật ngữ highlights */
+.glossary-term {
+  border-bottom: 1.5px dashed #8b5cf6;
+  cursor: help;
+  text-decoration: none;
+  background-color: rgba(139, 92, 246, 0.08);
+  padding: 0.1em 0.25em;
+  border-radius: 0.25rem;
+  transition: all 0.15s ease-in-out;
+  display: inline;
+}
+
+.dark .glossary-term {
+  border-bottom-color: #a78bfa;
+  background-color: rgba(167, 139, 250, 0.12);
+}
+
+.glossary-term:hover,
+.glossary-term.active {
+  background-color: rgba(139, 92, 246, 0.2);
+  color: #7c3aed;
+}
+
+.dark .glossary-term:hover,
+.dark .glossary-term.active {
+  background-color: rgba(167, 139, 250, 0.25);
+  color: #c4b5fd;
+}
+

@@ -2,10 +2,10 @@
 
 import React from "react";
 import Link from "next/link";
-import { FileText, Users, GraduationCap, Layers, Flag, Activity } from "lucide-react";
+import { FileText, Users, GraduationCap, Layers, Flag, Activity, BookMarked } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
-export type AdminTab = "posts" | "users" | "series" | "categories" | "reports" | "logs";
+export type AdminTab = "posts" | "users" | "series" | "categories" | "reports" | "logs" | "glossary";
 
 interface AdminNavProps {
   currentTab: AdminTab;
@@ -62,6 +62,13 @@ export const AdminNav: React.FC<AdminNavProps> = ({
       label: "Nhật ký",
       href: "/admin/logs",
       icon: Activity,
+      adminOnly: true,
+    },
+    {
+      key: "glossary",
+      label: "Thuật ngữ",
+      href: "/admin/glossary",
+      icon: BookMarked,
       adminOnly: true,
     },
   ];

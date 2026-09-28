@@ -73,7 +73,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, token, isLoading } = useAuth();
-  const { withLoading } = useLoading();
+  const { withLoading, showLoading, hideLoading } = useLoading();
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = user?.role === "admin" || user?.is_admin;
@@ -215,7 +215,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
   // 2. Chặn chuyển trang nội bộ (Click vào link hoặc nút chuyển trang)
   useEffect(() => {
     const handleAnchorClick = (e: MouseEvent) => {
-      if (!isDirty) return;
+      if (!isDirtyRef.current) return;
 
       const target = (e.target as HTMLElement).closest("a");
       if (!target) return;
@@ -228,23 +228,36 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
 
       e.preventDefault();
       e.stopPropagation();
+      hideLoading();
       setPendingNavigationUrl(href);
       setShowExitConfirmModal(true);
     };
 
     document.addEventListener("click", handleAnchorClick, true);
     return () => document.removeEventListener("click", handleAnchorClick, true);
+  }, [hideLoading]);
+
+  // Giữ tham chiếu isDirty mới nhất mà không gây re-trigger effect khi người dùng đang gõ phím
+  const isDirtyRef = useRef(isDirty);
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+    if (isDirty) {
+      document.body.setAttribute("data-editor-dirty", "true");
+    } else {
+      document.body.removeAttribute("data-editor-dirty");
+    }
+    return () => {
+      document.body.removeAttribute("data-editor-dirty");
+    };
   }, [isDirty]);
 
-  // 3. Chặn nút Back / Forward trình duyệt
+  // 3. Chặn nút Back / Forward trình duyệt khi có dữ liệu chưa lưu
   useEffect(() => {
-    if (!isDirty) return;
-
-    window.history.pushState(null, "", window.location.href);
-
     const handlePopState = () => {
-      if (isDirty) {
+      if (isDirtyRef.current) {
+        // Đẩy lại state để người dùng không bị rời trang và hiển thị modal xác nhận
         window.history.pushState(null, "", window.location.href);
+        hideLoading();
         setPendingNavigationUrl("BACK");
         setShowExitConfirmModal(true);
       }
@@ -252,11 +265,13 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [isDirty]);
+  }, [hideLoading]);
 
   const handleConfirmExit = () => {
     setHasSavedSuccessfully(true);
     setShowExitConfirmModal(false);
+    document.body.removeAttribute("data-editor-dirty");
+    showLoading("Đang quay về trang...");
     if (pendingNavigationUrl === "BACK") {
       window.history.go(-2);
     } else if (pendingNavigationUrl) {
@@ -762,6 +777,16 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
         <div className="flex items-center gap-3">
           <Link
             href={backHref}
+            data-no-loading="true"
+            onClick={(e) => {
+              if (isDirty) {
+                e.preventDefault();
+                e.stopPropagation();
+                hideLoading();
+                setPendingNavigationUrl(backHref);
+                setShowExitConfirmModal(true);
+              }
+            }}
             className={`p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-stone-800 transition-colors ${
               loading ? "pointer-events-none opacity-40 cursor-not-allowed" : ""
             }`}
@@ -1871,7 +1896,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
 
                 {/* Tóm tắt bài viết */}
                 {summary && (
-                  <p className="text-base sm:text-lg text-stone-600 dark:text-stone-300 leading-relaxed italic border-l-2 border-blue-500 pl-4 py-0.5">
+                  <p className="text-base sm:text-lg text-stone-600 dark:text-stone-300 leading-relaxed italic border-l-2 border-blue-500 pl-4 py-0.5 whitespace-pre-line">
                     {summary}
                   </p>
                 )}
@@ -2078,6 +2103,7 @@ export const PostEditorForm: React.FC<PostEditorFormProps> = ({ postId }) => {
                 onClick={() => {
                   setShowExitConfirmModal(false);
                   setPendingNavigationUrl(null);
+                  hideLoading();
                 }}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors border border-stone-200 dark:border-stone-700 cursor-pointer"
               >

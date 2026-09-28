@@ -119,6 +119,7 @@ class Post(Base):
     chapter = relationship("Chapter", back_populates="posts", lazy="selectin")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan", order_by="Comment.created_at.desc()", lazy="selectin")
     likes = relationship("PostLike", back_populates="post", cascade="all, delete-orphan", lazy="selectin")
+    bookmarks = relationship("PostBookmark", back_populates="post", cascade="all, delete-orphan", lazy="selectin")
     reports = relationship("PostReport", back_populates="post", cascade="all, delete-orphan", lazy="selectin")
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -156,6 +157,19 @@ class PostLike(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     post = relationship("Post", back_populates="likes")
+    user = relationship("User", foreign_keys=[user_id], lazy="selectin")
+
+
+class PostBookmark(Base):
+    """Mô hình Lưu / Đánh dấu bài viết yêu thích (Bookmark)."""
+    __tablename__ = "post_bookmarks"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    post_id = Column(String(36), ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    post = relationship("Post", back_populates="bookmarks", lazy="selectin")
     user = relationship("User", foreign_keys=[user_id], lazy="selectin")
 
 
@@ -200,3 +214,14 @@ class Comment(Base):
     user = relationship("User", lazy="selectin")
     post = relationship("Post", back_populates="comments")
     replies = relationship("Comment", cascade="all, delete-orphan", order_by="Comment.created_at.asc()", lazy="selectin")
+
+
+class GlossaryTerm(Base):
+    """Mô hình Thuật ngữ và giải thích (Glossary / Terminology)."""
+    __tablename__ = "glossary_terms"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    term = Column(String(200), unique=True, index=True, nullable=False)
+    definition = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

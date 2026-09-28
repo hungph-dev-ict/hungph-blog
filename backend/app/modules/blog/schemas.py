@@ -278,3 +278,25 @@ class CommentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- Glossary / Thuật ngữ ---
+class GlossaryTermCreate(BaseModel):
+    term: str
+    definition: str
+
+
+class GlossaryTermUpdate(BaseModel):
+    term: Optional[str] = None
+    definition: Optional[str] = None
+
+
+class GlossaryTermResponse(BaseModel):
+    id: str
+    term: str
+    definition: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

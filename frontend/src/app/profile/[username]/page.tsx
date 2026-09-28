@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useLoading } from "@/lib/loading-context";
-import { getUserProfile, getFollowStatus, toggleFollow, fetchPosts, updateMyProfile } from "@/lib/api";
+import { getUserProfile, getFollowStatus, toggleFollow, fetchPosts, fetchUserBookmarks, updateMyProfile } from "@/lib/api";
 import { UserProfile, FollowStatus, PostListItem } from "@/lib/types";
-import { Users, UserCheck, Calendar, BookOpen, Plus, FileText, ArrowLeft, Code2, Sparkles, Terminal, Cpu, Edit3 } from "lucide-react";
+import { Users, UserCheck, Calendar, BookOpen, Bookmark, Plus, FileText, ArrowLeft, Code2, Sparkles, Terminal, Cpu, Edit3 } from "lucide-react";
 import { PostCard } from "@/components/blog/PostCard";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { LoadingOverlay } from "@/components/common/LoadingOverlay";
@@ -18,6 +18,8 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
   const [posts, setPosts] = useState<PostListItem[]>([]);
+  const [bookmarks, setBookmarks] = useState<PostListItem[]>([]);
+  const [activeTab, setActiveTab] = useState<"posts" | "bookmarks">("posts");
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
   const [error, setError] = useState("");
@@ -51,12 +53,14 @@ export default function ProfilePage() {
     try {
       const p = await getUserProfile(username);
       setProfile(p);
-      const [status, postData] = await Promise.all([
+      const [status, postData, bookmarkData] = await Promise.all([
         getFollowStatus(p.id, token || undefined),
         fetchPosts({ author_id: p.id, limit: 20, page: 1 }),
+        fetchUserBookmarks(username, token || undefined).catch(() => []),
       ]);
       setFollowStatus(status);
       setPosts(postData.items || []);
+      setBookmarks(bookmarkData || []);
     } catch {
       setError("Không tìm thấy thông tin người dùng này.");
     } finally {
@@ -376,6 +380,12 @@ export default function ProfilePage() {
                   <strong className="text-stone-900 dark:text-white">{followStatus?.following_count ?? 0}</strong> đang theo dõi
                 </span>
               </div>
+              <div className="flex items-center gap-1.5">
+                <Bookmark className="w-4 h-4 text-amber-500" />
+                <span>
+                  <strong className="text-stone-900 dark:text-white">{bookmarks.length}</strong> đã lưu
+                </span>
+              </div>
               <div className="flex items-center gap-1.5 text-stone-400">
                 <Calendar className="w-4 h-4" />
                 <span>Tham gia {new Date(profile.created_at).toLocaleDateString("vi-VN", { month: "long", year: "numeric" })}</span>
@@ -385,17 +395,53 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Posts Feed Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-3">
-          <h2 className="flex items-center gap-2 text-lg sm:text-xl font-bold text-stone-900 dark:text-white">
-            <BookOpen className="w-5 h-5 text-blue-600" />
-            <span>Bài viết đã xuất bản ({posts.length})</span>
-          </h2>
-          {isOwnProfile && (
+      {/* Posts & Bookmarks Tabs Section */}
+      <div className="space-y-5">
+        <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 gap-4">
+          <div className="flex items-center gap-2 -mb-px">
+            <button
+              onClick={() => setActiveTab("posts")}
+              className={`flex items-center gap-2 py-3 px-3 sm:px-4 text-sm font-semibold border-b-2 transition-all ${
+                activeTab === "posts"
+                  ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>Bài viết đã đăng</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                activeTab === "posts"
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-bold"
+                  : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400"
+              }`}>
+                {posts.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("bookmarks")}
+              className={`flex items-center gap-2 py-3 px-3 sm:px-4 text-sm font-semibold border-b-2 transition-all ${
+                activeTab === "bookmarks"
+                  ? "border-amber-500 text-amber-600 dark:text-amber-400"
+                  : "border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
+              }`}
+            >
+              <Bookmark className="w-4 h-4" />
+              <span>Đã lưu</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                activeTab === "bookmarks"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 font-bold"
+                  : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400"
+              }`}>
+                {bookmarks.length}
+              </span>
+            </button>
+          </div>
+
+          {isOwnProfile && activeTab === "posts" && (
             <Link
               href="/editor/new"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mb-2"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Viết bài mới</span>
@@ -404,39 +450,74 @@ export default function ProfilePage() {
         </div>
 
         <div className="relative min-h-[220px]">
-          <LoadingOverlay isLoading={loading} message="Đang tải bài viết của tác giả..." />
+          <LoadingOverlay isLoading={loading} message="Đang tải dữ liệu..." />
 
-          {posts.length === 0 ? (
-            <div className="text-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3 bg-stone-50/40 dark:bg-stone-900/30">
-              <div className="w-12 h-12 mx-auto rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400">
-                <BookOpen className="w-6 h-6" />
-              </div>
-              <h3 className="font-semibold text-stone-800 dark:text-stone-200">
-                Chưa có bài viết nào
-              </h3>
-              <p className="text-sm text-stone-500 dark:text-stone-400 max-w-sm mx-auto">
-                {isOwnProfile
-                  ? "Bạn chưa xuất bản bài viết nào. Hãy bấm viết bài để chia sẻ kiến thức đầu tiên của bạn!"
-                  : "Tác giả này hiện chưa xuất bản bài viết nào."}
-              </p>
-              {isOwnProfile && (
-                <div className="pt-2">
-                  <Link
-                    href="/editor/new"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Tạo bài viết đầu tiên</span>
-                  </Link>
+          {activeTab === "posts" ? (
+            posts.length === 0 ? (
+              <div className="text-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3 bg-stone-50/40 dark:bg-stone-900/30">
+                <div className="w-12 h-12 mx-auto rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400">
+                  <BookOpen className="w-6 h-6" />
                 </div>
-              )}
-            </div>
+                <h3 className="font-semibold text-stone-800 dark:text-stone-200">
+                  Chưa có bài viết nào
+                </h3>
+                <p className="text-sm text-stone-500 dark:text-stone-400 max-w-sm mx-auto">
+                  {isOwnProfile
+                    ? "Bạn chưa xuất bản bài viết nào. Hãy bấm viết bài để chia sẻ kiến thức đầu tiên của bạn!"
+                    : "Tác giả này hiện chưa xuất bản bài viết nào."}
+                </p>
+                {isOwnProfile && (
+                  <div className="pt-2">
+                    <Link
+                      href="/editor/new"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Tạo bài viết đầu tiên</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className={`grid grid-cols-1 gap-5 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
+                {posts.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+              </div>
+            )
           ) : (
-            <div className={`grid grid-cols-1 gap-5 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
-              {posts.map((post) => (
-                <PostCard key={post.id} post={post} />
-              ))}
-            </div>
+            bookmarks.length === 0 ? (
+              <div className="text-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3 bg-stone-50/40 dark:bg-stone-900/30">
+                <div className="w-12 h-12 mx-auto rounded-full bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-500">
+                  <Bookmark className="w-6 h-6" />
+                </div>
+                <h3 className="font-semibold text-stone-800 dark:text-stone-200">
+                  Chưa lưu bài viết nào
+                </h3>
+                <p className="text-sm text-stone-500 dark:text-stone-400 max-w-sm mx-auto">
+                  {isOwnProfile
+                    ? "Bạn chưa lưu bài viết nào. Hãy bookmark những bài viết hay để dễ dàng đọc lại khi cần!"
+                    : "Người dùng này chưa có bài viết đã lưu nào."}
+                </p>
+                {isOwnProfile && (
+                  <div className="pt-2">
+                    <Link
+                      href="/"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-sm shadow-amber-500/25 transition-all"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Khám phá bài viết ngay</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className={`grid grid-cols-1 gap-5 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
+                {bookmarks.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>

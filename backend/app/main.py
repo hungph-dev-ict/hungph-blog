@@ -12,8 +12,9 @@ from app.core.database import Base, engine, AsyncSessionLocal
 from app.core.security import get_password_hash
 from app.modules.auth.models import User
 from app.modules.auth.router import router as auth_router
-from app.modules.blog.models import Category, Chapter, Post, Series, Tag
+from app.modules.blog.models import Category, Chapter, Post, Series, Tag, GlossaryTerm, PostBookmark
 from app.modules.blog.router import router as blog_router
+from app.modules.blog.glossary_router import router as glossary_router
 from app.modules.media.router import router as media_router
 from app.modules.rag.router import router as rag_router
 from app.modules.utilities.router import router as utilities_router
@@ -546,6 +547,39 @@ QUY TẮC PHẢN HỒI BẮT BUỘC:
             db.add(rag_article)
             await db.commit()
 
+        # Khởi tạo dữ liệu mẫu cho Thuật ngữ (Glossary) nếu đang trống
+        stmt_glossary = select(GlossaryTerm)
+        res_glossary = await db.execute(stmt_glossary)
+        if not res_glossary.scalars().first():
+            sample_glossary = [
+                GlossaryTerm(
+                    term="RAG",
+                    definition="Retrieval-Augmented Generation: Kỹ thuật kết hợp truy xuất tài liệu liên quan từ cơ sở dữ liệu bên ngoài với LLM để sinh câu trả lời chính xác, cập nhật và giảm ảo giác."
+                ),
+                GlossaryTerm(
+                    term="LLM",
+                    definition="Large Language Model: Mô hình ngôn ngữ lớn dựa trên kiến trúc Transformer, được huấn luyện trên lượng dữ liệu khổng lồ để hiểu và sinh văn bản tự nhiên."
+                ),
+                GlossaryTerm(
+                    term="Vector Database",
+                    definition="Cơ sở dữ liệu chuyên biệt dùng để lưu trữ và truy vấn nhanh các vector embedding thông qua giải thuật tìm kiếm độ tương đồng (Cosine similarity, Dot product,...)."
+                ),
+                GlossaryTerm(
+                    term="Hallucination",
+                    definition="Hiện tượng ảo giác của AI khi mô hình tự tin sinh ra thông tin có vẻ hợp lý nhưng hoàn toàn sai lệch thực tế hoặc không có căn cứ từ dữ liệu nguồn."
+                ),
+                GlossaryTerm(
+                    term="Fine-Tuning",
+                    definition="Quá trình tái huấn luyện mô hình nền tảng (Foundation Model) trên tập dữ liệu chuyên biệt để thay đổi trọng số, tinh chỉnh phong cách, format hoặc tác vụ đặc thù."
+                ),
+                GlossaryTerm(
+                    term="Embedding",
+                    definition="Biểu diễn toán học của văn bản, hình ảnh dưới dạng vector số thực nhiều chiều (nhiều chiều vector), nắm bắt ngữ nghĩa và quan hệ giữa các khái niệm."
+                ),
+            ]
+            db.add_all(sample_glossary)
+            await db.commit()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -597,6 +631,7 @@ app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 # Đăng ký API Routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(blog_router, prefix=settings.API_V1_STR)
+app.include_router(glossary_router, prefix=settings.API_V1_STR)
 app.include_router(media_router, prefix=settings.API_V1_STR)
 app.include_router(rag_router, prefix=settings.API_V1_STR)
 app.include_router(utilities_router, prefix=settings.API_V1_STR)

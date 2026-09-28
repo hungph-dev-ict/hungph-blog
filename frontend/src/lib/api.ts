@@ -20,6 +20,10 @@ import {
   AuditLog,
   AuditLogListResponse,
   AuditStats,
+  GlossaryTerm,
+  GlossaryTermCreatePayload,
+  GlossaryTermUpdatePayload,
+  BookmarkStatus,
 } from "./types";
 
 export const API_BASE_URL =
@@ -696,6 +700,32 @@ export async function getLikeStatus(postId: string, token?: string): Promise<Lik
   return res.json();
 }
 
+// ── Social: Bookmarks ──────────────────────────────────────────
+
+export async function toggleBookmark(postId: string, token: string): Promise<BookmarkStatus> {
+  const res = await fetch(`${API_BASE_URL}/blog/posts/${postId}/bookmark`, {
+    method: "POST",
+    headers: getHeaders(token),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getBookmarkStatus(postId: string, token?: string): Promise<BookmarkStatus> {
+  const res = await fetch(`${API_BASE_URL}/blog/posts/${postId}/bookmark-status`, {
+    headers: token ? getHeaders(token) : {},
+  });
+  return res.json();
+}
+
+export async function fetchUserBookmarks(username: string, token?: string): Promise<PostListItem[]> {
+  const res = await fetch(`${API_BASE_URL}/blog/users/${username}/bookmarks`, {
+    headers: token ? getHeaders(token) : {},
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 // ── Social: Reports ───────────────────────────────────────────
 
 export async function reportPost(
@@ -878,6 +908,67 @@ export async function getAuditStats(token: string): Promise<AuditStats> {
     throw new Error(err.detail || "Không thể tải thống kê nhật ký");
   }
   return res.json();
+}
+
+// --- GLOSSARY / THUẬT NGỮ ---
+
+export async function fetchGlossaryTerms(search?: string): Promise<GlossaryTerm[]> {
+  const query = new URLSearchParams();
+  if (search?.trim()) query.set("search", search.trim());
+  const qs = query.toString() ? `?${query.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}/glossary${qs}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể tải danh sách thuật ngữ");
+  }
+  return res.json();
+}
+
+export async function createGlossaryTerm(
+  payload: GlossaryTermCreatePayload,
+  token: string
+): Promise<GlossaryTerm> {
+  const res = await fetch(`${API_BASE_URL}/glossary`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể tạo thuật ngữ");
+  }
+  return res.json();
+}
+
+export async function updateGlossaryTerm(
+  id: string,
+  payload: GlossaryTermUpdatePayload,
+  token: string
+): Promise<GlossaryTerm> {
+  const res = await fetch(`${API_BASE_URL}/glossary/${id}`, {
+    method: "PUT",
+    headers: getHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể cập nhật thuật ngữ");
+  }
+  return res.json();
+}
+
+export async function deleteGlossaryTerm(
+  id: string,
+  token: string
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/glossary/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(token),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể xóa thuật ngữ");
+  }
 }
 
 
