@@ -1,0 +1,52 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Write(**)",
+      "Edit(**)",
+      "Glob(**)",
+      "Grep(**)",
+      "Bash(git *)",
+      "Bash(npm *)",
+      "Bash(python *)",
+      "Bash(pytest *)",
+      "Bash(npx *)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(rm -rf *)",
+      "Bash(git reset --hard *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git push *)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ \"$BRANCH\" = \"main\" ]; then echo '[C-001] Pushing to main = production deploy trigger. CONFIRM: have all unit tests been run and passed 100%? If not, abort and run /run-tests first.'; else echo '[C-001] Non-main push OK. Tests required before merging to main.'; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(git merge *)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[HOOK] git merge detected — deterministic gate: verify test runner result before merge'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(vercel*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[CONSTRAINT] Deploy qua vercel CLI không dùng cho project này. Deploy = git push origin main (Vercel auto-deploy). Xem CLAUDE.md section Deploy.' && exit 1"
+          }
+        ]
+      }
+    ]
+  }
+}
