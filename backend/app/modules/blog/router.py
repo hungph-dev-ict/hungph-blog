@@ -2143,17 +2143,33 @@ async def get_bookmark_status(
     return BookmarkStatusResponse(bookmarked=bookmarked, bookmarks_count=bookmarks_count)
 
 
-@router.get("/users/{username}/bookmarks", response_model=List[PostListItem])
+@router.get("/users/{username}/bookmarks", response_model=PaginatedPosts)
 async def get_user_bookmarked_posts(
     username: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     optional_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Lấy danh sách các bài viết mà người dùng đã bookmark / lưu lại."""
+    """Lấy danh sách các bài viết mà người dùng đã bookmark / lưu lại (có phân trang)."""
     target_user = (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
     if not target_user:
         raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
 
+    is_self = bool(optional_user and optional_user.id == target_user.id)
+    is_admin = bool(optional_user and (optional_user.is_admin or getattr(optional_user, "role", "") == "admin"))
+
+    # Count total bookmarks
+    count_stmt = (
+        select(func.count(Post.id))
+        .join(PostBookmark, PostBookmark.post_id == Post.id)
+        .where(PostBookmark.user_id == target_user.id)
+    )
+    if not (is_self or is_admin):
+        count_stmt = count_stmt.where(Post.is_published == True)
+    total = (await db.execute(count_stmt)).scalar_one()
+
+    offset = (page - 1) * limit
     stmt = (
         select(Post)
         .join(PostBookmark, PostBookmark.post_id == Post.id)
@@ -2167,16 +2183,25 @@ async def get_user_bookmarked_posts(
             selectinload(Post.likes),
         )
         .order_by(desc(PostBookmark.created_at))
+        .offset(offset)
+        .limit(limit)
     )
 
-    is_self = bool(optional_user and optional_user.id == target_user.id)
-    is_admin = bool(optional_user and (optional_user.is_admin or getattr(optional_user, "role", "") == "admin"))
     if not (is_self or is_admin):
         stmt = stmt.where(Post.is_published == True)
 
     result = await db.execute(stmt)
     posts = result.scalars().all()
-    return posts
+
+    total_pages = math.ceil(total / limit) if total > 0 else 1
+
+    return PaginatedPosts(
+        items=[PostListItem.model_validate(p) for p in posts],
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=total_pages,
+    )
 
 
 # ══════════════════════════════════════════════════════════════

@@ -5,11 +5,12 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useLoading } from "@/lib/loading-context";
 import { getUserProfile, getFollowStatus, toggleFollow, fetchPosts, fetchUserBookmarks, updateMyProfile } from "@/lib/api";
-import { UserProfile, FollowStatus, PostListItem } from "@/lib/types";
+import { UserProfile, FollowStatus, PostListItem, PaginatedPosts } from "@/lib/types";
 import { Users, UserCheck, Calendar, BookOpen, Bookmark, Plus, FileText, ArrowLeft, Code2, Sparkles, Terminal, Cpu, Edit3 } from "lucide-react";
 import { PostCard } from "@/components/blog/PostCard";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { LoadingOverlay } from "@/components/common/LoadingOverlay";
+import { Pagination } from "@/components/common/Pagination";
 import Link from "next/link";
 
 export default function ProfilePage() {
@@ -17,8 +18,12 @@ export default function ProfilePage() {
   const { user, token } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
-  const [posts, setPosts] = useState<PostListItem[]>([]);
-  const [bookmarks, setBookmarks] = useState<PostListItem[]>([]);
+  const [postsData, setPostsData] = useState<PaginatedPosts | null>(null);
+  const [bookmarksData, setBookmarksData] = useState<PaginatedPosts | null>(null);
+  const [postsPage, setPostsPage] = useState(1);
+  const [bookmarksPage, setBookmarksPage] = useState(1);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [bookmarksLoading, setBookmarksLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"posts" | "bookmarks">("posts");
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
@@ -43,6 +48,8 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!username) return;
+    setPostsPage(1);
+    setBookmarksPage(1);
     loadProfile();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, token]);
@@ -55,16 +62,49 @@ export default function ProfilePage() {
       setProfile(p);
       const [status, postData, bookmarkData] = await Promise.all([
         getFollowStatus(p.id, token || undefined),
-        fetchPosts({ author_id: p.id, limit: 20, page: 1 }),
-        fetchUserBookmarks(username, token || undefined).catch(() => []),
+        fetchPosts({ author_id: p.id, limit: 10, page: 1 }),
+        fetchUserBookmarks(username, { page: 1, limit: 10 }, token || undefined).catch(() => ({
+          items: [],
+          total: 0,
+          page: 1,
+          limit: 10,
+          total_pages: 1,
+        } as PaginatedPosts)),
       ]);
       setFollowStatus(status);
-      setPosts(postData.items || []);
-      setBookmarks(bookmarkData || []);
+      setPostsData(postData);
+      setBookmarksData(bookmarkData);
     } catch {
       setError("Không tìm thấy thông tin người dùng này.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePostsPageChange = async (page: number) => {
+    if (!profile) return;
+    setPostsPage(page);
+    setPostsLoading(true);
+    try {
+      const data = await fetchPosts({ author_id: profile.id, limit: 10, page });
+      setPostsData(data);
+    } catch {
+      // keep existing data on error
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  const handleBookmarksPageChange = async (page: number) => {
+    setBookmarksPage(page);
+    setBookmarksLoading(true);
+    try {
+      const data = await fetchUserBookmarks(username, { page, limit: 10 }, token || undefined);
+      setBookmarksData(data);
+    } catch {
+      // keep existing data on error
+    } finally {
+      setBookmarksLoading(false);
     }
   };
 
@@ -365,7 +405,7 @@ export default function ProfilePage() {
               <div className="flex items-center gap-1.5">
                 <BookOpen className="w-4 h-4 text-blue-600" />
                 <span>
-                  <strong className="text-stone-900 dark:text-white">{posts.length}</strong> bài viết
+                  <strong className="text-stone-900 dark:text-white">{postsData?.total ?? 0}</strong> bài viết
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -383,7 +423,7 @@ export default function ProfilePage() {
               <div className="flex items-center gap-1.5">
                 <Bookmark className="w-4 h-4 text-amber-500" />
                 <span>
-                  <strong className="text-stone-900 dark:text-white">{bookmarks.length}</strong> đã lưu
+                  <strong className="text-stone-900 dark:text-white">{bookmarksData?.total ?? 0}</strong> đã lưu
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-stone-400">
@@ -414,7 +454,7 @@ export default function ProfilePage() {
                   ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-bold"
                   : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400"
               }`}>
-                {posts.length}
+                {postsData?.total ?? 0}
               </span>
             </button>
 
@@ -433,7 +473,7 @@ export default function ProfilePage() {
                   ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 font-bold"
                   : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400"
               }`}>
-                {bookmarks.length}
+                {bookmarksData?.total ?? 0}
               </span>
             </button>
           </div>
@@ -453,7 +493,7 @@ export default function ProfilePage() {
           <LoadingOverlay isLoading={loading} message="Đang tải dữ liệu..." />
 
           {activeTab === "posts" ? (
-            posts.length === 0 ? (
+            (postsData?.items ?? []).length === 0 ? (
               <div className="text-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3 bg-stone-50/40 dark:bg-stone-900/30">
                 <div className="w-12 h-12 mx-auto rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400">
                   <BookOpen className="w-6 h-6" />
@@ -479,14 +519,28 @@ export default function ProfilePage() {
                 )}
               </div>
             ) : (
-              <div className={`grid grid-cols-1 gap-5 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
-                {posts.map((post) => (
-                  <PostCard key={post.id} post={post} />
-                ))}
+              <div className="space-y-5">
+                <div className={`grid grid-cols-1 gap-5 transition-opacity duration-200 ${postsLoading ? "opacity-40 pointer-events-none" : ""}`}>
+                  {(postsData?.items ?? []).map((post) => (
+                    <PostCard key={post.id} post={post} />
+                  ))}
+                </div>
+                {postsData && postsData.total_pages > 1 && (
+                  <div className="pt-2">
+                    <Pagination
+                      currentPage={postsPage}
+                      totalPages={postsData.total_pages}
+                      totalItems={postsData.total}
+                      itemsName="bài viết"
+                      onPageChange={handlePostsPageChange}
+                      disabled={postsLoading}
+                    />
+                  </div>
+                )}
               </div>
             )
           ) : (
-            bookmarks.length === 0 ? (
+            (bookmarksData?.items ?? []).length === 0 ? (
               <div className="text-center py-16 px-4 border border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3 bg-stone-50/40 dark:bg-stone-900/30">
                 <div className="w-12 h-12 mx-auto rounded-full bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-500">
                   <Bookmark className="w-6 h-6" />
@@ -512,10 +566,24 @@ export default function ProfilePage() {
                 )}
               </div>
             ) : (
-              <div className={`grid grid-cols-1 gap-5 transition-opacity duration-200 ${loading ? "opacity-40 pointer-events-none" : ""}`}>
-                {bookmarks.map((post) => (
-                  <PostCard key={post.id} post={post} />
-                ))}
+              <div className="space-y-5">
+                <div className={`grid grid-cols-1 gap-5 transition-opacity duration-200 ${bookmarksLoading ? "opacity-40 pointer-events-none" : ""}`}>
+                  {(bookmarksData?.items ?? []).map((post) => (
+                    <PostCard key={post.id} post={post} />
+                  ))}
+                </div>
+                {bookmarksData && bookmarksData.total_pages > 1 && (
+                  <div className="pt-2">
+                    <Pagination
+                      currentPage={bookmarksPage}
+                      totalPages={bookmarksData.total_pages}
+                      totalItems={bookmarksData.total}
+                      itemsName="bài đã lưu"
+                      onPageChange={handleBookmarksPageChange}
+                      disabled={bookmarksLoading}
+                    />
+                  </div>
+                )}
               </div>
             )
           )}

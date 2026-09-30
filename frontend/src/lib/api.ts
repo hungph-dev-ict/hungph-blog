@@ -718,8 +718,16 @@ export async function getBookmarkStatus(postId: string, token?: string): Promise
   return res.json();
 }
 
-export async function fetchUserBookmarks(username: string, token?: string): Promise<PostListItem[]> {
-  const res = await fetch(`${API_BASE_URL}/blog/users/${username}/bookmarks`, {
+export async function fetchUserBookmarks(
+  username: string,
+  params?: { page?: number; limit?: number },
+  token?: string
+): Promise<PaginatedPosts> {
+  const query = new URLSearchParams();
+  if (params?.page) query.append("page", params.page.toString());
+  if (params?.limit) query.append("limit", params.limit.toString());
+  const qs = query.toString() ? `?${query.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}/blog/users/${username}/bookmarks${qs}`, {
     headers: token ? getHeaders(token) : {},
   });
   if (!res.ok) throw new Error(await res.text());
