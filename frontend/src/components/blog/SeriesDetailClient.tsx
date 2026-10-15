@@ -34,7 +34,7 @@ import {
 } from "@/lib/api";
 import { Chapter, SeriesDetail } from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
-import { buildChapterTree, flattenChapterTree } from "@/lib/tree-utils";
+import { buildChapterTree, flattenChapterTree, countLessons } from "@/lib/tree-utils";
 
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { useLoading } from "@/lib/loading-context";
@@ -527,7 +527,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-medium text-stone-400">
-                          {chapter.lessons?.length || 0} bài học
+                          {countLessons(chapter)} bài học
                         </span>
                         {canEditOutline && (
                           <div className="flex items-center gap-1">

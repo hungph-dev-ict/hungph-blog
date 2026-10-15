@@ -53,3 +53,13 @@ export function flattenChapterTree(nodes: ChapterNode[]): ChapterNode[] {
   nodes.forEach(traverse);
   return list;
 }
+
+/**
+ * Recursively counts all lessons in a chapter node and all its descendants.
+ * Use this instead of `chapter.lessons?.length` for parent chapters with children.
+ */
+export function countLessons(node: ChapterNode): number {
+  const own = node.lessons?.length ?? 0;
+  const childTotal = node.children.reduce((sum, child) => sum + countLessons(child), 0);
+  return own + childTotal;
+}
