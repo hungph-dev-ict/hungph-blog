@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -22,6 +22,11 @@ import {
   Clock,
   ArrowUp,
   ArrowDown,
+  RotateCcw,
+  TrendingUp,
+  LogIn,
+  Trophy,
+  BarChart3,
 } from "lucide-react";
 import {
   getCollaborators,
@@ -31,6 +36,12 @@ import {
   updateChapter,
   deleteChapter,
   fetchSeriesBySlug,
+  getSeriesProgress,
+  toggleLessonProgress,
+  resetSeriesProgress,
+  getAdminSeriesProgress,
+  SeriesProgressData,
+  AdminProgressEntry,
 } from "@/lib/api";
 import { Chapter, SeriesDetail } from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
@@ -68,6 +79,14 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
 
   const [activeTab, setActiveTab] = useState<"content" | "info">("content");
   const [isEnrolled, setIsEnrolled] = useState(false);
+
+  // ── Series Progress State ──────────────────────────────────────
+  const [progress, setProgress] = useState<SeriesProgressData | null>(null);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [togglingLesson, setTogglingLesson] = useState<string | null>(null);
+  const [showAdminProgressModal, setShowAdminProgressModal] = useState(false);
+  const [adminProgressData, setAdminProgressData] = useState<AdminProgressEntry[]>([]);
+  const [adminProgressLoading, setAdminProgressLoading] = useState(false);
 
   // Collaborator state
   const [isAlreadyCollaborator, setIsAlreadyCollaborator] = useState(false);
@@ -107,6 +126,62 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
   const [editSiblingChapters, setEditSiblingChapters] = useState<Chapter[]>([]);
   const [isUpdatingChapter, setIsUpdatingChapter] = useState(false);
   const [editChapterError, setEditChapterError] = useState("");
+
+  // Load series progress for logged-in user
+  const loadProgress = useCallback(async () => {
+    if (!user || !token) return;
+    setProgressLoading(true);
+    try {
+      const data = await getSeriesProgress(series.id, token);
+      setProgress(data);
+    } catch {
+      // non-critical
+    } finally {
+      setProgressLoading(false);
+    }
+  }, [user, token, series.id]);
+
+  useEffect(() => {
+    loadProgress();
+  }, [loadProgress]);
+
+  const handleToggleLesson = async (lessonId: string) => {
+    if (!token) return;
+    setTogglingLesson(lessonId);
+    try {
+      const updated = await toggleLessonProgress(series.id, lessonId, token);
+      setProgress(updated);
+    } catch {
+      // ignore
+    } finally {
+      setTogglingLesson(null);
+    }
+  };
+
+  const handleResetProgress = async () => {
+    if (!token) return;
+    if (!window.confirm("Bạn có chắc muốn reset toàn bộ tiến độ học series này? Hành động này không thể hoàn tác.")) return;
+    try {
+      const updated = await resetSeriesProgress(series.id, token);
+      setProgress(updated);
+    } catch {
+      alert("Không thể reset tiến độ, vui lòng thử lại.");
+    }
+  };
+
+  const handleOpenAdminProgress = async () => {
+    if (!token) return;
+    setShowAdminProgressModal(true);
+    setAdminProgressLoading(true);
+    try {
+      const data = await getAdminSeriesProgress(series.id, token);
+      setAdminProgressData(data);
+    } catch {
+      setAdminProgressData([]);
+    } finally {
+      setAdminProgressLoading(false);
+    }
+  };
 
   // Check if current user is already a collaborator and get pending count
   useEffect(() => {
@@ -318,6 +393,82 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
               </p>
             )}
 
+            {/* ── Progress Bar (logged in) ── */}
+            {user && progress && progress.total_lessons > 0 && (
+              <div className="mt-3 p-4 rounded-2xl bg-gradient-to-r from-emerald-50/80 to-teal-50/60 dark:from-emerald-950/30 dark:to-teal-950/20 border border-emerald-200/70 dark:border-emerald-800/50 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Tiến độ học của bạn</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                      {progress.completed_count}/{progress.total_lessons} bài
+                    </span>
+                    {progress.percent === 100 && (
+                      <Trophy className="w-4 h-4 text-amber-500 animate-bounce" />
+                    )}
+                  </div>
+                </div>
+                <div className="relative h-2.5 bg-emerald-100 dark:bg-emerald-900/40 rounded-full overflow-hidden">
+                  <div
+                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-700 ease-out"
+                    style={{ width: `${progress.percent}%` }}
+                  />
+                  {progress.percent > 0 && progress.percent < 100 && (
+                    <div
+                      className="absolute top-0 h-full w-4 bg-white/30 rounded-full animate-pulse"
+                      style={{ left: `calc(${progress.percent}% - 8px)` }}
+                    />
+                  )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-emerald-600/80 dark:text-emerald-400/70 font-medium">
+                    {progress.percent === 100
+                      ? "🎉 Hoàn thành xuất sắc!"
+                      : progress.percent > 0
+                      ? `${progress.percent}% hoàn thành`
+                      : "Bắt đầu hành trình học của bạn"}
+                  </span>
+                  {progress.completed_count > 0 && (
+                    <button
+                      onClick={handleResetProgress}
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-500 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300 transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reset tiến độ
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Login prompt for unauthenticated users ── */}
+            {!user && (
+              <div className="mt-3 relative overflow-hidden rounded-2xl border border-indigo-200/70 dark:border-indigo-800/50 bg-gradient-to-r from-indigo-50 via-blue-50/60 to-violet-50/40 dark:from-indigo-950/30 dark:via-blue-950/20 dark:to-violet-950/20 p-4">
+                <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-indigo-400/10 dark:bg-indigo-500/10" />
+                <div className="absolute -right-1 bottom-1 w-12 h-12 rounded-full bg-violet-400/10 dark:bg-violet-500/10" />
+                <div className="flex items-center gap-3 relative">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 flex items-center justify-center shrink-0">
+                    <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-indigo-900 dark:text-indigo-200">Theo dõi tiến trình học của bạn</p>
+                    <p className="text-[11px] text-indigo-600/80 dark:text-indigo-400/70 mt-0.5">
+                      Đăng nhập để lưu lại bài đã học và theo dõi tiến độ của bạn
+                    </p>
+                  </div>
+                  <Link
+                    href="/login"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shadow-md shadow-indigo-500/20 transition-all hover:scale-[1.03] shrink-0"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    Đăng nhập
+                  </Link>
+                </div>
+              </div>
+            )}
+
             <div className="pt-2 flex flex-wrap items-center gap-3">
               {firstLesson && (
                 <Link
@@ -325,7 +476,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-all hover:scale-[1.02]"
                 >
                   <Play className="w-4 h-4 fill-white" />
-                  <span>Bắt đầu học (Bài 1: {firstLesson.title})</span>
+                  <span>{progress && progress.completed_count > 0 ? "Tiếp tục học" : "Bắt đầu học"}</span>
                 </Link>
               )}
               {canManageCollab && (
@@ -340,6 +491,15 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                       {pendingCollabCount} chờ duyệt
                     </span>
                   )}
+                </button>
+              )}
+              {canManageCollab && (
+                <button
+                  onClick={handleOpenAdminProgress}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/40 dark:hover:bg-violet-900/50 text-violet-800 dark:text-violet-200 font-semibold text-sm transition-all border border-violet-300 dark:border-violet-800 hover:scale-[1.02] shadow-xs"
+                >
+                  <BarChart3 className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                  <span>Xem tiến độ thành viên</span>
                 </button>
               )}
               {isAlreadyCollaborator && (
@@ -580,34 +740,72 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
 
                     {/* Lessons in this chapter */}
                     {chapter.lessons && chapter.lessons.length > 0 ? (
-                      <div className="grid grid-cols-1 gap-1.5 pt-2 border-t border-stone-100 dark:border-stone-800">
-                        {chapter.lessons.map((lesson, lIdx) => (
-                          <Link
-                            key={lesson.id}
-                            href={`/posts/${lesson.slug}`}
-                            className="group flex items-center justify-between p-2.5 rounded-xl hover:bg-stone-50 dark:hover:bg-stone-800/60 transition-colors"
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <CheckCircle2 className="w-4 h-4 text-stone-300 dark:text-stone-600 group-hover:text-blue-500 transition-colors shrink-0" />
-                              <div>
-                                <span className="text-xs text-stone-400 mr-2 font-medium">
-                                  {chapter.displayNumber}.{lIdx + 1}
-                                </span>
-                                <span className="text-xs font-medium text-stone-800 dark:text-stone-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                  {lesson.title}
-                                </span>
+                      <div className="grid grid-cols-1 gap-1 pt-2 border-t border-stone-100 dark:border-stone-800">
+                        {chapter.lessons.map((lesson, lIdx) => {
+                          const isCompleted = progress?.completed_lesson_ids.includes(lesson.id) ?? false;
+                          const isToggling = togglingLesson === lesson.id;
+                          return (
+                            <div
+                              key={lesson.id}
+                              className={`group flex items-center justify-between p-2.5 rounded-xl transition-all ${
+                                isCompleted
+                                  ? "bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                  : "hover:bg-stone-50 dark:hover:bg-stone-800/60"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                {user ? (
+                                  <button
+                                    onClick={() => handleToggleLesson(lesson.id)}
+                                    disabled={isToggling}
+                                    title={isCompleted ? "Bỏ đánh dấu đã học" : "Đánh dấu đã học"}
+                                    className="shrink-0 focus:outline-none"
+                                  >
+                                    {isToggling ? (
+                                      <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
+                                    ) : isCompleted ? (
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-500 hover:text-emerald-600 transition-colors drop-shadow-sm" />
+                                    ) : (
+                                      <CheckCircle2 className="w-4 h-4 text-stone-300 dark:text-stone-600 hover:text-emerald-400 transition-colors" />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <CheckCircle2 className="w-4 h-4 text-stone-300 dark:text-stone-600 shrink-0" />
+                                )}
+                                <Link
+                                  href={`/posts/${lesson.slug}`}
+                                  className="flex items-center gap-1.5 flex-1 min-w-0 group/link"
+                                >
+                                  <span className="text-xs text-stone-400 font-medium shrink-0">
+                                    {chapter.displayNumber}.{lIdx + 1}
+                                  </span>
+                                  <span className={`text-xs font-medium truncate transition-colors ${
+                                    isCompleted
+                                      ? "text-emerald-700 dark:text-emerald-400 group-hover/link:text-emerald-800 dark:group-hover/link:text-emerald-300"
+                                      : "text-stone-800 dark:text-stone-200 group-hover/link:text-blue-600 dark:group-hover/link:text-blue-400"
+                                  }`}>
+                                    {lesson.title}
+                                  </span>
+                                  {isCompleted && (
+                                    <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
+                                      ✓ Đã học
+                                    </span>
+                                  )}
+                                </Link>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {lesson.reading_time_minutes > 0 && (
+                                  <span className="text-[11px] text-stone-400 hidden sm:inline">
+                                    {lesson.reading_time_minutes} phút
+                                  </span>
+                                )}
+                                <Link href={`/posts/${lesson.slug}`}>
+                                  <ChevronRight className="w-4 h-4 text-stone-400 group-hover:translate-x-0.5 transition-transform" />
+                                </Link>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {lesson.reading_time_minutes > 0 && (
-                                <span className="text-[11px] text-stone-400 hidden sm:inline">
-                                  {lesson.reading_time_minutes} phút
-                                </span>
-                              )}
-                              <ChevronRight className="w-4 h-4 text-stone-400 group-hover:translate-x-0.5 transition-transform" />
-                            </div>
-                          </Link>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : null}
                   </div>
@@ -1155,6 +1353,104 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Admin xem tiến độ thành viên ── */}
+      {showAdminProgressModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setShowAdminProgressModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 p-6 sm:p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto space-y-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-stone-900 dark:text-white">Tiến độ học của thành viên</h3>
+                  <p className="text-xs text-stone-500">{series.title}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAdminProgressModal(false)}
+                className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {adminProgressLoading ? (
+              <div className="flex items-center justify-center py-12 gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
+                <span className="text-sm text-stone-500">Đang tải tiến độ thành viên...</span>
+              </div>
+            ) : adminProgressData.length === 0 ? (
+              <div className="text-center py-12 space-y-2">
+                <TrendingUp className="w-10 h-10 text-stone-300 dark:text-stone-600 mx-auto" />
+                <p className="text-sm text-stone-500">Chưa có thành viên nào bắt đầu học series này.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-stone-500 font-medium">{adminProgressData.length} thành viên đã bắt đầu học</p>
+                {adminProgressData.map((entry, idx) => (
+                  <div
+                    key={entry.user_id}
+                    className="flex items-center gap-3 p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-100 dark:border-stone-800 hover:border-violet-200 dark:hover:border-violet-800 transition-colors"
+                  >
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 shrink-0">
+                      {idx + 1}
+                    </div>
+                    {entry.avatar_url ? (
+                      <img src={entry.avatar_url} alt={entry.username} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-stone-200 dark:bg-stone-700 flex items-center justify-center text-xs font-bold text-stone-600 dark:text-stone-300 shrink-0">
+                        {(entry.full_name || entry.username)[0].toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-stone-900 dark:text-white truncate">
+                            {entry.full_name || entry.username}
+                          </p>
+                          <p className="text-[10px] text-stone-500">@{entry.username}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-bold text-violet-700 dark:text-violet-300">
+                            {entry.percent}%
+                          </p>
+                          <p className="text-[10px] text-stone-400">{entry.completed_count}/{entry.total_lessons} bài</p>
+                        </div>
+                      </div>
+                      <div className="relative h-1.5 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
+                        <div
+                          className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
+                            entry.percent === 100
+                              ? "bg-gradient-to-r from-amber-400 to-yellow-400"
+                              : "bg-gradient-to-r from-violet-500 to-indigo-400"
+                          }`}
+                          style={{ width: `${entry.percent}%` }}
+                        />
+                      </div>
+                      {entry.updated_at && (
+                        <p className="text-[10px] text-stone-400">
+                          Cập nhật: {new Date(entry.updated_at).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                        </p>
+                      )}
+                    </div>
+                    {entry.percent === 100 && (
+                      <Trophy className="w-5 h-5 text-amber-500 shrink-0" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

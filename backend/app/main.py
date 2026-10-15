@@ -12,7 +12,7 @@ from app.core.database import Base, engine, AsyncSessionLocal
 from app.core.security import get_password_hash
 from app.modules.auth.models import User
 from app.modules.auth.router import router as auth_router
-from app.modules.blog.models import Category, Chapter, Post, Series, Tag, GlossaryTerm, PostBookmark
+from app.modules.blog.models import Category, Chapter, Post, Series, Tag, GlossaryTerm, PostBookmark, SeriesProgress
 from app.modules.blog.router import router as blog_router
 from app.modules.blog.glossary_router import router as glossary_router
 from app.modules.media.router import router as media_router

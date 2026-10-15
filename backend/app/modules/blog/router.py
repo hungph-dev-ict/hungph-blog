@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.modules.auth.deps import get_current_admin, get_current_user, get_optional_user
 from app.modules.auth.models import User
-from app.modules.blog.models import Category, Chapter, Comment, Post, PostLike, PostBookmark, PostReport, Series, SeriesCollaborator, Tag, post_tags
+from app.modules.blog.models import Category, Chapter, Comment, Post, PostLike, PostBookmark, PostReport, Series, SeriesCollaborator, SeriesProgress, Tag, post_tags
 from app.modules.social.models import Follow, Notification
 from app.modules.audit.service import record_audit_log
 from app.modules.blog.schemas import (
@@ -2361,3 +2361,224 @@ async def update_report(
         admin_note=report.admin_note,
         created_at=report.created_at,
     )
+
+
+# ── Series Progress Tracking ────────────────────────────────────────────────
+
+from pydantic import BaseModel as PydanticBaseModel
+
+class LessonToggleBody(PydanticBaseModel):
+    lesson_id: str
+
+class ProgressResponse(PydanticBaseModel):
+    series_id: str
+    user_id: str
+    completed_lesson_ids: list
+    total_lessons: int
+    completed_count: int
+    percent: float
+
+class AdminProgressEntry(PydanticBaseModel):
+    user_id: str
+    username: str
+    full_name: Optional[str]
+    avatar_url: Optional[str]
+    completed_count: int
+    total_lessons: int
+    percent: float
+    updated_at: Optional[str]
+
+
+def _collect_lesson_ids(series: Series) -> list:
+    """Lấy tất cả lesson IDs (post IDs) trong một series."""
+    ids = []
+    for chapter in (series.chapters or []):
+        for post in (chapter.posts or []):
+            if post.is_published:
+                ids.append(post.id)
+    return ids
+
+
+@router.get("/series/{series_id}/progress", response_model=ProgressResponse)
+async def get_series_progress(
+    series_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy tiến độ đọc series của user hiện tại."""
+    stmt = select(Series).where(Series.id == series_id).options(
+        selectinload(Series.chapters).selectinload(Chapter.posts)
+    )
+    res = await db.execute(stmt)
+    series = res.scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Series không tìm thấy")
+
+    stmt2 = select(SeriesProgress).where(
+        SeriesProgress.series_id == series_id,
+        SeriesProgress.user_id == current_user.id
+    )
+    res2 = await db.execute(stmt2)
+    progress = res2.scalar_one_or_none()
+
+    total_ids = _collect_lesson_ids(series)
+    completed = json.loads(progress.completed_lesson_ids) if progress else []
+    completed = [lid for lid in completed if lid in total_ids]  # sanitize
+
+    return ProgressResponse(
+        series_id=series_id,
+        user_id=current_user.id,
+        completed_lesson_ids=completed,
+        total_lessons=len(total_ids),
+        completed_count=len(completed),
+        percent=round(len(completed) / len(total_ids) * 100, 1) if total_ids else 0.0,
+    )
+
+
+@router.post("/series/{series_id}/progress/toggle", response_model=ProgressResponse)
+async def toggle_lesson_progress(
+    series_id: str,
+    body: LessonToggleBody,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Đánh dấu / bỏ đánh dấu một bài học là đã hoàn thành."""
+    stmt = select(Series).where(Series.id == series_id).options(
+        selectinload(Series.chapters).selectinload(Chapter.posts)
+    )
+    res = await db.execute(stmt)
+    series = res.scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Series không tìm thấy")
+
+    total_ids = _collect_lesson_ids(series)
+    if body.lesson_id not in total_ids:
+        raise HTTPException(status_code=400, detail="Bài học không thuộc series này")
+
+    stmt2 = select(SeriesProgress).where(
+        SeriesProgress.series_id == series_id,
+        SeriesProgress.user_id == current_user.id
+    )
+    res2 = await db.execute(stmt2)
+    progress = res2.scalar_one_or_none()
+
+    if not progress:
+        progress = SeriesProgress(
+            series_id=series_id,
+            user_id=current_user.id,
+            completed_lesson_ids="[]"
+        )
+        db.add(progress)
+
+    completed = json.loads(progress.completed_lesson_ids or "[]")
+    if body.lesson_id in completed:
+        completed.remove(body.lesson_id)
+    else:
+        completed.append(body.lesson_id)
+
+    progress.completed_lesson_ids = json.dumps(completed)
+    progress.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    completed = [lid for lid in completed if lid in total_ids]
+    return ProgressResponse(
+        series_id=series_id,
+        user_id=current_user.id,
+        completed_lesson_ids=completed,
+        total_lessons=len(total_ids),
+        completed_count=len(completed),
+        percent=round(len(completed) / len(total_ids) * 100, 1) if total_ids else 0.0,
+    )
+
+
+@router.delete("/series/{series_id}/progress", response_model=ProgressResponse)
+async def reset_series_progress(
+    series_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reset tiến độ đọc series (học lại từ đầu)."""
+    stmt = select(Series).where(Series.id == series_id).options(
+        selectinload(Series.chapters).selectinload(Chapter.posts)
+    )
+    res = await db.execute(stmt)
+    series = res.scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Series không tìm thấy")
+
+    stmt2 = select(SeriesProgress).where(
+        SeriesProgress.series_id == series_id,
+        SeriesProgress.user_id == current_user.id
+    )
+    res2 = await db.execute(stmt2)
+    progress = res2.scalar_one_or_none()
+    if progress:
+        progress.completed_lesson_ids = "[]"
+        progress.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+
+    total_ids = _collect_lesson_ids(series)
+    return ProgressResponse(
+        series_id=series_id,
+        user_id=current_user.id,
+        completed_lesson_ids=[],
+        total_lessons=len(total_ids),
+        completed_count=0,
+        percent=0.0,
+    )
+
+
+@router.get("/series/{series_id}/admin/progress", response_model=List[AdminProgressEntry])
+async def get_series_admin_progress(
+    series_id: str,
+    admin_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trang quản trị: xem tiến độ đọc của tất cả thành viên trong một series.
+    Chỉ dành cho: tác giả series, cộng tác viên accepted, admin.
+    """
+    stmt = select(Series).where(Series.id == series_id).options(
+        selectinload(Series.chapters).selectinload(Chapter.posts),
+        selectinload(Series.collaborators)
+    )
+    res = await db.execute(stmt)
+    series = res.scalar_one_or_none()
+    if not series:
+        raise HTTPException(status_code=404, detail="Series không tìm thấy")
+
+    # Permission check
+    is_owner = series.owner_id == admin_user.id
+    is_admin = admin_user.is_admin or admin_user.role == "admin"
+    is_collab = any(
+        c.user_id == admin_user.id and c.status == "accepted"
+        for c in (series.collaborators or [])
+    )
+    if not (is_owner or is_admin or is_collab):
+        raise HTTPException(status_code=403, detail="Không có quyền xem tiến độ thành viên")
+
+    total_ids = _collect_lesson_ids(series)
+    total = len(total_ids)
+
+    stmt2 = select(SeriesProgress).where(SeriesProgress.series_id == series_id)
+    res2 = await db.execute(stmt2)
+    all_progress = res2.scalars().all()
+
+    result = []
+    for p in all_progress:
+        user = p.user
+        if not user:
+            continue
+        completed = [lid for lid in json.loads(p.completed_lesson_ids or "[]") if lid in total_ids]
+        result.append(AdminProgressEntry(
+            user_id=p.user_id,
+            username=user.username,
+            full_name=user.full_name,
+            avatar_url=user.avatar_url,
+            completed_count=len(completed),
+            total_lessons=total,
+            percent=round(len(completed) / total * 100, 1) if total else 0.0,
+            updated_at=p.updated_at.isoformat() if p.updated_at else None,
+        ))
+
+    result.sort(key=lambda x: x.percent, reverse=True)
+    return result

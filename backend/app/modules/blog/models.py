@@ -225,3 +225,19 @@ class GlossaryTerm(Base):
     definition = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class SeriesProgress(Base):
+    """Theo dõi tiến độ đọc series của từng thành viên."""
+    __tablename__ = "series_progress"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    series_id = Column(String(36), ForeignKey("series.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # JSON array of completed post IDs: ["post_id1", "post_id2", ...]
+    completed_lesson_ids = Column(Text, default="[]", nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    series = relationship("Series", lazy="selectin")
+    user = relationship("User", foreign_keys=[user_id], lazy="selectin")

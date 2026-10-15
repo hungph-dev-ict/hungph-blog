@@ -980,5 +980,78 @@ export async function deleteGlossaryTerm(
 }
 
 
+// ── Series Progress Tracking ──────────────────────────────────────────
+
+export interface SeriesProgressData {
+  series_id: string;
+  user_id: string;
+  completed_lesson_ids: string[];
+  total_lessons: number;
+  completed_count: number;
+  percent: number;
+}
+
+export interface AdminProgressEntry {
+  user_id: string;
+  username: string;
+  full_name?: string;
+  avatar_url?: string;
+  completed_count: number;
+  total_lessons: number;
+  percent: number;
+  updated_at?: string;
+}
+
+export async function getSeriesProgress(seriesId: string, token: string): Promise<SeriesProgressData> {
+  const res = await fetch(`${API_BASE_URL}/blog/series/${seriesId}/progress`, {
+    headers: getHeaders(token),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể lấy tiến độ");
+  }
+  return res.json();
+}
+
+export async function toggleLessonProgress(seriesId: string, lessonId: string, token: string): Promise<SeriesProgressData> {
+  const res = await fetch(`${API_BASE_URL}/blog/series/${seriesId}/progress/toggle`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify({ lesson_id: lessonId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể cập nhật tiến độ");
+  }
+  return res.json();
+}
+
+export async function resetSeriesProgress(seriesId: string, token: string): Promise<SeriesProgressData> {
+  const res = await fetch(`${API_BASE_URL}/blog/series/${seriesId}/progress`, {
+    method: "DELETE",
+    headers: getHeaders(token),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể reset tiến độ");
+  }
+  return res.json();
+}
+
+export async function getAdminSeriesProgress(seriesId: string, token: string): Promise<AdminProgressEntry[]> {
+  const res = await fetch(`${API_BASE_URL}/blog/series/${seriesId}/admin/progress`, {
+    headers: getHeaders(token),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể lấy tiến độ thành viên");
+  }
+  return res.json();
+}
+
+
+
 
 
