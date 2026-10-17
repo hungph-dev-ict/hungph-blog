@@ -457,30 +457,21 @@ export default function AdminRAGPage() {
 
   return (
     <AdminGuard>
-      <div className="w-full max-w-6xl mx-auto space-y-6 pb-20">
-        <LoadingOverlay isLoading={isProcessing} message={processMessage} />
-
+      <div className="w-full space-y-6 pb-16">
         <AdminPageHeader
           currentTab="rag"
           breadcrumbs={[
-            { label: "Admin", href: "/admin" },
-            { label: "Kho tri thức & RAG AI" },
+            { label: "Quản trị", href: "/admin/posts" },
+            { label: "Kho Tri Thức & RAG AI" },
           ]}
-          title="Quản Lý Kho Tri Thức (RAG Knowledge Bases)"
-          description="Thiết lập các kho tri thức độc lập theo từng chuyên đề, khóa học hoặc danh sách bài viết để trợ lý AI tìm kiếm và trả lời chính xác."
+          title="Quản Lý Kho Tri Thức"
+          description={`Hệ thống có ${allKbs.length} kho tri thức (${kbs.filter((k) => k.is_active).length} kho tuỳ chỉnh đang kích hoạt). Thiết lập kho theo chuyên đề để trợ lý AI tìm kiếm và trả lời chính xác.`}
           icon={Bot}
-          actionButton={
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-all shadow-blue-500/20"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tạo Kho Tri Thức Mới</span>
-              </button>
-            </div>
-          }
+          backHref="/rag"
+          backTitle="Về trang chat RAG"
+          badgeText="Admin"
+          badgeVariant="purple"
+          disabled={isProcessing}
         />
 
         {/* Notification Banner */}
@@ -584,21 +575,56 @@ export default function AdminRAGPage() {
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-stone-900/60 p-3 rounded-2xl border border-stone-200 dark:border-stone-800">
-          <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm kiếm kho tri thức theo tên, slug, mô tả..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 text-stone-900 dark:text-white focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-            />
+        {/* Search & Filter Bar */}
+        <div className="p-4 rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/40 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+            {/* Search input */}
+            <div className="lg:col-span-9 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+              <input
+                type="text"
+                disabled={isProcessing}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm kiếm kho tri thức theo tên, slug, mô tả..."
+                className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all disabled:opacity-60"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Create button */}
+            <div className="lg:col-span-3">
+              <button
+                type="button"
+                onClick={openCreateModal}
+                disabled={isProcessing}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all disabled:opacity-50 disabled:pointer-events-none"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Tạo Kho Tri Thức Mới</span>
+              </button>
+            </div>
           </div>
-          <span className="text-xs text-stone-500 shrink-0">
-            Hiển thị <strong>{filteredKbs.length}</strong> kho tri thức
-          </span>
+
+          {/* Result summary */}
+          <div className="flex items-center justify-between text-xs text-stone-500 pt-1 border-t border-stone-200/50 dark:border-stone-800/50">
+            <span>
+              Hiển thị <strong>{filteredKbs.length}</strong> / {allKbs.length} kho tri thức
+            </span>
+            {isProcessing && (
+              <div className="flex items-center gap-1.5 text-blue-600 text-[11px] font-medium animate-pulse">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Đang xử lý, vui lòng chờ...</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Knowledge Base Cards Grid */}
@@ -606,6 +632,11 @@ export default function AdminRAGPage() {
           <LoadingOverlay
             isLoading={loading}
             message="Đang tải dữ liệu Kho Tri Thức..."
+            rounded="rounded-3xl"
+          />
+          <LoadingOverlay
+            isLoading={isProcessing}
+            message={processMessage || "Đang xử lý..."}
             rounded="rounded-3xl"
           />
 
@@ -891,6 +922,7 @@ export default function AdminRAGPage() {
             })}
           </div>
         )}
+        </div>
 
         {/* Modal Create / Edit Knowledge Base */}
         {isModalOpen && (
