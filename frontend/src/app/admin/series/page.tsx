@@ -301,7 +301,7 @@ function AdminSeriesContent() {
     setSubmitting(true);
     await withLoading(async () => {
       try {
-        await updateSeries(
+        const updated = await updateSeries(
           editingSeries.id,
           {
             title: editTitle.trim(),
@@ -317,8 +317,9 @@ function AdminSeriesContent() {
         );
         setEditingSeries(null);
         await loadData();
-        if (selectedSeriesSlug === editingSeries.slug) {
-          inspectSeries(editingSeries.slug);
+        const targetSlug = updated?.slug || editingSeries.slug;
+        if (selectedSeriesSlug === editingSeries.slug || selectedDetail?.id === editingSeries.id) {
+          inspectSeries(targetSlug);
         }
       } catch (err: any) {
         alert(`Lỗi khi cập nhật khóa học: ${err.message}`);
