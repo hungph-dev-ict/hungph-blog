@@ -602,12 +602,44 @@ export default function AdminRAGPage() {
         </div>
 
         {/* Knowledge Base Cards Grid */}
-        {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center space-y-3">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            <span className="text-xs text-stone-500 font-medium">Đang tải dữ liệu Kho Tri Thức...</span>
-          </div>
-        ) : filteredKbs.length === 0 ? (
+        <div className="relative min-h-[360px]">
+          <LoadingOverlay
+            isLoading={loading}
+            message="Đang tải dữ liệu Kho Tri Thức..."
+            rounded="rounded-3xl"
+          />
+
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="p-5 rounded-3xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 space-y-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="h-5 w-28 rounded-full bg-stone-100 dark:bg-stone-800" />
+                    <div className="h-4 w-16 rounded-full bg-stone-100 dark:bg-stone-800" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-5 w-3/4 rounded-lg bg-stone-100 dark:bg-stone-800" />
+                    <div className="h-3 w-full rounded-lg bg-stone-100 dark:bg-stone-800" />
+                    <div className="h-3 w-5/6 rounded-lg bg-stone-100 dark:bg-stone-800" />
+                  </div>
+                  <div className="p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/40 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="h-14 rounded-xl bg-stone-100 dark:bg-stone-700/40" />
+                      <div className="h-14 rounded-xl bg-stone-100 dark:bg-stone-700/40" />
+                    </div>
+                    <div className="h-3 w-2/3 rounded-lg bg-stone-100 dark:bg-stone-800 mx-auto" />
+                  </div>
+                  <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center gap-2">
+                    <div className="h-7 w-24 rounded-xl bg-stone-100 dark:bg-stone-800" />
+                    <div className="h-7 w-16 rounded-xl bg-stone-100 dark:bg-stone-800" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredKbs.length === 0 ? (
           <div className="py-16 text-center border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-3xl space-y-3 bg-white/40 dark:bg-stone-900/20">
             <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 mx-auto flex items-center justify-center">
               <Database className="w-6 h-6" />
