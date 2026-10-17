@@ -23,6 +23,8 @@ import {
   Clock,
   ChevronRight,
   BookOpen,
+  Lock,
+  Globe,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -42,6 +44,23 @@ import { AdminGuard } from "@/components/admin/AdminGuard";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { LoadingOverlay } from "@/components/common/LoadingOverlay";
 
+function formatLastIndexed(dateStr?: string | null): string {
+  if (!dateStr) return "Chưa từng lập chỉ mục";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "Chưa từng lập chỉ mục";
+    return d.toLocaleString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
 export default function AdminRAGPage() {
   const { token } = useAuth();
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
@@ -53,9 +72,30 @@ export default function AdminRAGPage() {
   const [isReindexingGlobal, setIsReindexingGlobal] = useState(false);
   const [indexingKbId, setIndexingKbId] = useState<string | null>(null);
 
-  // Processing overlay
+  // Processing overlay (for deletion)
   const [isProcessing, setIsProcessing] = useState(false);
   const [processMessage, setProcessMessage] = useState("");
+
+  // Notification toast/banner state
+  const [notification, setNotification] = useState<{
+    type: "success" | "info" | "error";
+    title?: string;
+    message: string;
+  } | null>(null);
+
+  // Modal inline submission state
+  const [isSubmittingModal, setIsSubmittingModal] = useState(false);
+  const [backgroundIndexingIds, setBackgroundIndexingIds] = useState<string[]>([]);
+
+  // Auto-dismiss notification after 7 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => {
+        setNotification(null);
+      }, 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   // Modal create/edit state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -182,13 +222,15 @@ export default function AdminRAGPage() {
       return;
     }
 
-    setIsProcessing(true);
-    setProcessMessage(editingKb ? "Đang cập nhật kho tri thức..." : "Đang tạo kho tri thức mới...");
+    setIsSubmittingModal(true);
     setFormError("");
 
     try {
+      let savedKb: KnowledgeBase;
+      const willIndex = selectedSeriesIds.length > 0 || selectedPostIds.length > 0;
+
       if (editingKb) {
-        await updateKnowledgeBase(
+        savedKb = await updateKnowledgeBase(
           editingKb.id,
           {
             name: formName.trim(),
@@ -200,8 +242,16 @@ export default function AdminRAGPage() {
           },
           token
         );
+        setIsModalOpen(false);
+        setNotification({
+          type: "success",
+          title: "Cập nhật Kho Tri Thức thành công",
+          message: willIndex
+            ? `Kho tri thức "${savedKb.name}" đã được cập nhật! Quá trình lập chỉ mục Vector đang chạy ngầm trong nền.`
+            : `Đã cập nhật thông tin kho tri thức "${savedKb.name}".`,
+        });
       } else {
-        await createKnowledgeBase(
+        savedKb = await createKnowledgeBase(
           {
             name: formName.trim(),
             slug: formSlug.trim() || undefined,
@@ -211,14 +261,33 @@ export default function AdminRAGPage() {
           },
           token
         );
+        setIsModalOpen(false);
+        setNotification({
+          type: "success",
+          title: "Tạo Kho Tri Thức thành công",
+          message: willIndex
+            ? `Kho tri thức "${savedKb.name}" đã được tạo thành công! Hệ thống đang lập chỉ mục Vector (Embedding) trong nền.`
+            : `Kho tri thức "${savedKb.name}" đã được tạo thành công! Bạn có thể thêm bài viết và lập chỉ mục bất kỳ lúc nào.`,
+        });
       }
-      setIsModalOpen(false);
+
+      if (willIndex && savedKb?.id) {
+        const kbId = savedKb.id;
+        setBackgroundIndexingIds((prev) => [...prev, kbId]);
+        setTimeout(async () => {
+          await loadData();
+        }, 3500);
+        setTimeout(async () => {
+          await loadData();
+          setBackgroundIndexingIds((prev) => prev.filter((id) => id !== kbId));
+        }, 8000);
+      }
+
       await loadData();
     } catch (err: any) {
-      setFormError(err.message || "Đã xảy ra lỗi");
+      setFormError(err.message || "Đã xảy ra lỗi khi lưu kho tri thức");
     } finally {
-      setIsProcessing(false);
-      setProcessMessage("");
+      setIsSubmittingModal(false);
     }
   };
 
@@ -237,6 +306,11 @@ export default function AdminRAGPage() {
     setProcessMessage(`Đang xóa kho tri thức "${kb.name}"...`);
     try {
       await deleteKnowledgeBase(kb.id, token);
+      setNotification({
+        type: "info",
+        title: "Đã xóa Kho Tri Thức",
+        message: `Đã xóa hoàn toàn kho tri thức "${kb.name}".`,
+      });
       await loadData();
     } catch (err: any) {
       alert(`Lỗi khi xóa: ${err.message}`);
@@ -252,11 +326,24 @@ export default function AdminRAGPage() {
     setIndexingKbId(kb.id);
     try {
       const res = await triggerKBIndex(kb.id, token);
-      alert(res.message);
-      setTimeout(loadData, 4000);
+      setNotification({
+        type: "info",
+        title: "Đang lập chỉ mục Vector",
+        message: res.message || `Đang lập chỉ mục cho kho tri thức "${kb.name}" trong nền.`,
+      });
+      setTimeout(async () => {
+        await loadData();
+        setIndexingKbId(null);
+      }, 4000);
+      setTimeout(async () => {
+        await loadData();
+      }, 8000);
     } catch (err: any) {
-      alert(`Lỗi lập chỉ mục: ${err.message}`);
-    } finally {
+      setNotification({
+        type: "error",
+        title: "Lỗi lập chỉ mục",
+        message: err.message || "Không thể kích hoạt lập chỉ mục",
+      });
       setIndexingKbId(null);
     }
   };
@@ -268,26 +355,68 @@ export default function AdminRAGPage() {
     setIsReindexingGlobal(true);
     try {
       const res = await triggerRAGIndex(token);
-      alert(res.message);
+      setNotification({
+        type: "info",
+        title: "Đang đồng bộ Vector toàn blog",
+        message: res.message || "Hệ thống đang lập lại chỉ mục cho tất cả bài viết trong nền.",
+      });
       setTimeout(loadData, 4000);
+      setTimeout(loadData, 8000);
     } catch (err: any) {
-      alert(`Lỗi: ${err.message}`);
+      setNotification({
+        type: "error",
+        title: "Lỗi đồng bộ",
+        message: err.message || "Không thể kích hoạt đồng bộ",
+      });
     } finally {
       setIsReindexingGlobal(false);
     }
   };
 
+  // Global Blog KB representation as first-class Knowledge Base
+  const globalKb = useMemo<KnowledgeBase>(() => {
+    const total = ragStatus?.total_posts_count ?? 0;
+    const indexed = ragStatus?.indexed_posts_count ?? (ragStatus?.index_exists ? total : 0);
+    const pending = ragStatus?.pending_posts_count ?? Math.max(0, total - indexed);
+    const isIndexed = Boolean(ragStatus?.index_exists && (ragStatus?.num_vectors ?? 0) > 0);
+
+    return {
+      id: "global-blog-kb",
+      name: "Toàn Bộ Blog (Global Knowledge Base)",
+      slug: "global",
+      description: "Kho tri thức hệ thống mặc định của toàn bộ blog. Tự động bao gồm tất cả các bài viết đã xuất bản và là phạm vi tìm kiếm mặc định của trợ lý AI.",
+      is_active: true,
+      is_system: true,
+      created_at: ragStatus?.last_indexed_at || "",
+      updated_at: ragStatus?.last_indexed_at || "",
+      series_count: optionsData.series.length,
+      direct_posts_count: total,
+      effective_posts_count: total,
+      is_indexed: isIndexed,
+      num_vectors: ragStatus?.num_vectors ?? 0,
+      indexed_posts_count: indexed,
+      pending_posts_count: pending,
+      last_indexed_at: ragStatus?.last_indexed_at ?? null,
+      series: [],
+      posts: [],
+    };
+  }, [ragStatus, optionsData.series.length]);
+
+  const allKbs = useMemo(() => {
+    return [globalKb, ...kbs];
+  }, [globalKb, kbs]);
+
   // Filter list
   const filteredKbs = useMemo(() => {
-    if (!searchQuery.trim()) return kbs;
+    if (!searchQuery.trim()) return allKbs;
     const q = searchQuery.toLowerCase().trim();
-    return kbs.filter(
+    return allKbs.filter(
       (k) =>
         k.name.toLowerCase().includes(q) ||
         k.slug.toLowerCase().includes(q) ||
         (k.description && k.description.toLowerCase().includes(q))
     );
-  }, [kbs, searchQuery]);
+  }, [allKbs, searchQuery]);
 
   // Modal filtered options
   const filteredOptionsSeries = useMemo(() => {
@@ -324,16 +453,6 @@ export default function AdminRAGPage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handleGlobalReindex}
-                disabled={isReindexingGlobal}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-50 text-xs font-semibold shadow-xs transition-all disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isReindexingGlobal ? "animate-spin text-blue-600" : ""}`} />
-                <span>{isReindexingGlobal ? "Đang index..." : "Re-index Toàn Blog"}</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={openCreateModal}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-all shadow-blue-500/20"
               >
@@ -343,6 +462,43 @@ export default function AdminRAGPage() {
             </div>
           }
         />
+
+        {/* Notification Banner */}
+        {notification && (
+          <div
+            className={`p-4 rounded-2xl border flex items-start justify-between gap-3 shadow-xs transition-all ${
+              notification.type === "success"
+                ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100"
+                : notification.type === "error"
+                ? "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-100"
+                : "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-100"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              {notification.type === "success" ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              ) : notification.type === "error" ? (
+                <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              ) : (
+                <RefreshCw className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5 animate-spin" />
+              )}
+              <div className="space-y-0.5 text-xs sm:text-sm">
+                <div className="font-bold">{notification.title || "Thông báo"}</div>
+                <div className="leading-relaxed opacity-90">
+                  {notification.message}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNotification(null)}
+              className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors shrink-0"
+              title="Đóng thông báo"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Overview Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -448,176 +604,230 @@ export default function AdminRAGPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredKbs.map((kb) => (
-              <div
-                key={kb.id}
-                className="p-5 rounded-3xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/70 space-y-4 shadow-xs hover:border-blue-300 dark:hover:border-blue-800 transition-all flex flex-col justify-between"
-              >
-                <div className="space-y-3">
-                  {/* Top Badges */}
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          kb.is_active
-                            ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
-                            : "bg-stone-100 dark:bg-stone-800 text-stone-500"
-                        }`}
-                      >
-                        {kb.is_active ? "Đang kích hoạt" : "Tạm khóa"}
-                      </span>
+            {filteredKbs.map((kb) => {
+              const isGlobal = Boolean(kb.is_system);
+              const isGlobalReindexing = isGlobal && isReindexingGlobal;
+              const isKbIndexing = !isGlobal && (indexingKbId === kb.id || backgroundIndexingIds.includes(kb.id));
 
-                      {kb.is_indexed ? (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-blue-600" />
-                          <span>{kb.num_vectors} vectors</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 text-amber-600" />
-                          <span>Chưa lập index</span>
-                        </span>
+              return (
+                <div
+                  key={kb.id}
+                  className={`p-5 rounded-3xl border space-y-4 shadow-xs transition-all flex flex-col justify-between ${
+                    isGlobal
+                      ? "border-blue-300/80 dark:border-blue-800/80 bg-linear-to-br from-blue-50/40 via-white to-indigo-50/20 dark:from-stone-900 dark:via-stone-900/90 dark:to-blue-950/20 shadow-blue-500/5 hover:border-blue-400"
+                      : "border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/70 hover:border-blue-300 dark:hover:border-blue-800"
+                  }`}
+                >
+                  <div className="space-y-3">
+                    {/* Top Badges */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        {isGlobal ? (
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                            <Globe className="w-3 h-3" />
+                            <span>Kho Hệ Thống • Toàn Blog</span>
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              kb.is_active
+                                ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
+                                : "bg-stone-100 dark:bg-stone-800 text-stone-500"
+                            }`}
+                          >
+                            {kb.is_active ? "Đang kích hoạt" : "Tạm khóa"}
+                          </span>
+                        )}
+
+                        {isGlobalReindexing || isKbIndexing ? (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center gap-1 animate-pulse">
+                            <RefreshCw className="w-3 h-3 text-blue-600 animate-spin" />
+                            <span>Đang đồng bộ index...</span>
+                          </span>
+                        ) : kb.is_indexed ? (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                            <span>{kb.num_vectors} vectors</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 text-amber-600" />
+                            <span>Chưa lập index</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-[11px] font-mono text-stone-400">
+                        /{kb.slug}
+                      </span>
+                    </div>
+
+                    {/* Title & Desc */}
+                    <div>
+                      <h3 className="font-bold text-base text-stone-900 dark:text-white flex items-center gap-2">
+                        {isGlobal ? (
+                          <Globe className="w-4 h-4 text-blue-600 shrink-0" />
+                        ) : (
+                          <Database className="w-4 h-4 text-blue-600 shrink-0" />
+                        )}
+                        <span>{kb.name}</span>
+                      </h3>
+                      {kb.description && (
+                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 line-clamp-2 leading-relaxed">
+                          {kb.description}
+                        </p>
                       )}
                     </div>
 
-                    <span className="text-[11px] font-mono text-stone-400">
-                      /{kb.slug}
-                    </span>
-                  </div>
+                    {/* Indexing Stats Progress Block */}
+                    <div className="p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/40 border border-stone-100 dark:border-stone-800 space-y-2.5">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="p-2.5 rounded-xl bg-white dark:bg-stone-800/80 border border-stone-200/80 dark:border-stone-700/60">
+                          <div className="text-[10px] uppercase font-bold tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Đã Index</span>
+                          </div>
+                          <div className="text-base font-black text-stone-900 dark:text-white mt-0.5">
+                            {kb.indexed_posts_count ?? (kb.is_indexed ? kb.effective_posts_count : 0)}
+                            <span className="text-[11px] font-normal text-stone-500 ml-1">bài viết</span>
+                          </div>
+                        </div>
 
-                  {/* Title & Desc */}
-                  <div>
-                    <h3 className="font-bold text-base text-stone-900 dark:text-white flex items-center gap-2">
-                      <Database className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>{kb.name}</span>
-                    </h3>
-                    {kb.description && (
-                      <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 line-clamp-2 leading-relaxed">
-                        {kb.description}
-                      </p>
-                    )}
-                  </div>
+                        <div
+                          className={`p-2.5 rounded-xl border ${
+                            (kb.pending_posts_count ?? 0) > 0
+                              ? "bg-amber-50/80 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60"
+                              : "bg-white dark:bg-stone-800/80 border-stone-200/80 dark:border-stone-700/60"
+                          }`}
+                        >
+                          <div
+                            className={`text-[10px] uppercase font-bold tracking-wider flex items-center gap-1 ${
+                              (kb.pending_posts_count ?? 0) > 0
+                                ? "text-amber-700 dark:text-amber-400"
+                                : "text-stone-500"
+                            }`}
+                          >
+                            <Clock className="w-3 h-3" />
+                            <span>Chờ Index</span>
+                          </div>
+                          <div
+                            className={`text-base font-black mt-0.5 ${
+                              (kb.pending_posts_count ?? 0) > 0
+                                ? "text-amber-900 dark:text-amber-200"
+                                : "text-stone-900 dark:text-white"
+                            }`}
+                          >
+                            {kb.pending_posts_count ?? 0}
+                            <span className="text-[11px] font-normal text-stone-500 ml-1">bài viết</span>
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* Content Composition: Series & Posts */}
-                  <div className="p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/40 border border-stone-100 dark:border-stone-800 space-y-2 text-xs">
-                    {/* Series Pills */}
-                    <div className="flex items-start gap-2">
-                      <GraduationCap className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-[11px] text-stone-700 dark:text-stone-300">
-                            Khóa học ({kb.series_count}):
+                      {/* Lần index cuối cùng */}
+                      <div className="pt-2 border-t border-stone-200/60 dark:border-stone-700/50 flex items-center justify-between text-[11px]">
+                        <span className="text-stone-500 dark:text-stone-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-stone-400" />
+                          <span>Lần index cuối:</span>
+                        </span>
+                        <strong
+                          className="text-stone-800 dark:text-stone-200 font-semibold truncate max-w-[210px]"
+                          title={kb.last_indexed_at || undefined}
+                        >
+                          {formatLastIndexed(kb.last_indexed_at)}
+                        </strong>
+                      </div>
+
+                      {/* Composition info for custom KBs */}
+                      {!isGlobal && (
+                        <div className="pt-2 border-t border-stone-200/60 dark:border-stone-700/50 flex items-center justify-between text-[11px]">
+                          <span className="text-stone-500">Phạm vi nội dung:</span>
+                          <span className="text-stone-700 dark:text-stone-300 font-medium">
+                            {kb.series_count} khóa học • {kb.direct_posts_count} bài viết lẻ
                           </span>
                         </div>
-                        {kb.series && kb.series.length > 0 ? (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {kb.series.map((s) => (
-                              <span
-                                key={s.id}
-                                className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-amber-100/70 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 truncate max-w-[200px]"
-                                title={s.title}
-                              >
-                                {s.title} ({s.lesson_count} bài)
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-stone-400 italic">Không chọn khóa học nào</span>
-                        )}
-                      </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions Bar */}
+                  <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      {isGlobal ? (
+                        <button
+                          type="button"
+                          onClick={handleGlobalReindex}
+                          disabled={isReindexingGlobal}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold shadow-xs transition-all disabled:opacity-50"
+                          title="Lập lại toàn bộ chỉ mục vector cho tất cả bài viết trên blog"
+                        >
+                          <RefreshCw
+                            className={`w-3.5 h-3.5 ${
+                              isReindexingGlobal ? "animate-spin text-blue-400 dark:text-blue-600" : ""
+                            }`}
+                          />
+                          <span>{isReindexingGlobal ? "Đang index..." : "Re-index Toàn Blog"}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleIndexKB(kb)}
+                          disabled={isKbIndexing}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold transition-all disabled:opacity-50"
+                          title="Lập lại chỉ mục vector riêng cho kho này"
+                        >
+                          <RefreshCw
+                            className={`w-3 h-3 ${isKbIndexing ? "animate-spin text-blue-600" : ""}`}
+                          />
+                          <span>{isKbIndexing ? "Đang index..." : "Lập index"}</span>
+                        </button>
+                      )}
+
+                      <Link
+                        href={isGlobal ? "/rag" : `/rag?kb=${kb.id}`}
+                        target="_blank"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-semibold transition-all"
+                        title="Mở giao diện chat RAG cho kho này"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        <span>Chat thử</span>
+                        <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                      </Link>
                     </div>
 
-                    {/* Direct Posts Pills */}
-                    <div className="flex items-start gap-2 pt-1 border-t border-stone-200/60 dark:border-stone-700/50">
-                      <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-[11px] text-stone-700 dark:text-stone-300">
-                            Bài viết lẻ ({kb.direct_posts_count}):
-                          </span>
-                        </div>
-                        {kb.posts && kb.posts.length > 0 ? (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {kb.posts.slice(0, 3).map((p) => (
-                              <span
-                                key={p.id}
-                                className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-blue-100/70 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 truncate max-w-[180px]"
-                                title={p.title}
-                              >
-                                {p.title}
-                              </span>
-                            ))}
-                            {kb.posts.length > 3 && (
-                              <span className="text-[10px] text-stone-400 self-center">
-                                +{kb.posts.length - 3} bài nữa
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-stone-400 italic">Không chọn bài viết lẻ</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Total Effective Posts */}
-                    <div className="pt-2 border-t border-stone-200/60 dark:border-stone-700/50 flex items-center justify-between text-[11px]">
-                      <span className="text-stone-500">Tổng bài viết thực tế được index:</span>
-                      <strong className="text-stone-900 dark:text-white font-bold bg-white dark:bg-stone-700 px-2 py-0.5 rounded-md border border-stone-200 dark:border-stone-600">
-                        {kb.effective_posts_count} bài học
-                      </strong>
+                    <div className="flex items-center gap-1">
+                      {isGlobal ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-stone-400 dark:text-stone-500 px-2 py-1 rounded-lg bg-stone-100 dark:bg-stone-800"
+                          title="Kho tri thức hệ thống mặc định — Không thể chỉnh sửa hoặc xóa"
+                        >
+                          <Lock className="w-3 h-3" />
+                          <span>Hệ thống</span>
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(kb)}
+                            className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition-colors"
+                            title="Chỉnh sửa kho tri thức"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(kb)}
+                            className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                            title="Xóa kho tri thức"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
-
-                {/* Actions Bar */}
-                <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleIndexKB(kb)}
-                      disabled={indexingKbId === kb.id}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold transition-all"
-                      title="Lập lại chỉ mục vector riêng cho kho này"
-                    >
-                      <RefreshCw
-                        className={`w-3 h-3 ${indexingKbId === kb.id ? "animate-spin text-blue-600" : ""}`}
-                      />
-                      <span>{indexingKbId === kb.id ? "Đang index..." : "Lập index"}</span>
-                    </button>
-
-                    <Link
-                      href={`/rag?kb=${kb.id}`}
-                      target="_blank"
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-semibold transition-all"
-                      title="Mở giao diện chat RAG cho kho này"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      <span>Chat thử</span>
-                      <ExternalLink className="w-2.5 h-2.5 opacity-60" />
-                    </Link>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(kb)}
-                      className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition-colors"
-                      title="Chỉnh sửa kho tri thức"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(kb)}
-                      className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-                      title="Xóa kho tri thức"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -882,16 +1092,25 @@ export default function AdminRAGPage() {
                 <div className="pt-2 flex items-center justify-end gap-2">
                   <button
                     type="button"
+                    disabled={isSubmittingModal}
                     onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 text-xs text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 font-medium"
+                    className="px-4 py-2 text-xs text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 font-medium disabled:opacity-50"
                   >
                     Hủy bỏ
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20 transition-all"
+                    disabled={isSubmittingModal}
+                    className="px-5 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20 transition-all flex items-center gap-2 disabled:opacity-60"
                   >
-                    {editingKb ? "Lưu thay đổi & Lập chỉ mục" : "Xác nhận tạo Kho Tri Thức"}
+                    {isSubmittingModal ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>{editingKb ? "Đang lưu..." : "Đang tạo..."}</span>
+                      </>
+                    ) : (
+                      editingKb ? "Lưu thay đổi & Lập chỉ mục" : "Xác nhận tạo Kho Tri Thức"
+                    )}
                   </button>
                 </div>
               </form>

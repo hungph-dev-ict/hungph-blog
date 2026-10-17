@@ -107,6 +107,10 @@ class KnowledgeBaseResponse(BaseModel):
     effective_posts_count: int = 0
     is_indexed: bool = False
     num_vectors: int = 0
+    indexed_posts_count: int = 0
+    pending_posts_count: int = 0
+    last_indexed_at: Optional[str] = None
+    is_system: bool = False
     series: List[SeriesBriefItem] = []
     posts: List[PostBriefItem] = []
 
@@ -199,6 +203,10 @@ async def format_kb_response(db: AsyncSession, kb: KnowledgeBase) -> KnowledgeBa
     series_ids = [s.id for s in (kb.series or [])]
     effective_posts = await get_effective_posts_for_kb(db, post_ids, series_ids)
 
+    indexed_count = kb_status.get("indexed_posts_count", 0)
+    effective_count = len(effective_posts)
+    pending_count = max(0, effective_count - indexed_count)
+
     series_items = [
         SeriesBriefItem(
             id=s.id,
@@ -223,9 +231,13 @@ async def format_kb_response(db: AsyncSession, kb: KnowledgeBase) -> KnowledgeBa
         updated_at=kb.updated_at,
         series_count=len(kb.series or []),
         direct_posts_count=len(kb.posts or []),
-        effective_posts_count=len(effective_posts),
+        effective_posts_count=effective_count,
         is_indexed=kb_status.get("is_indexed", False),
         num_vectors=kb_status.get("num_vectors", 0),
+        indexed_posts_count=indexed_count,
+        pending_posts_count=pending_count,
+        last_indexed_at=kb_status.get("last_indexed_at"),
+        is_system=False,
         series=series_items,
         posts=post_items,
     )
@@ -319,7 +331,7 @@ async def create_knowledge_base(
     await db.commit()
     await db.refresh(kb)
 
-    # Tự động lập chỉ mục trong nền nếu đã chọn nội dung
+    # Tự động lập chỉ mục trong nền nếu đã chọn nội dung (chạy hoàn toàn ngầm qua thread pool)
     effective_posts = await get_effective_posts_for_kb(db, body.post_ids, body.series_ids)
     if effective_posts:
         kb_id = kb.id
@@ -328,7 +340,7 @@ async def create_knowledge_base(
                 build_index_for_kb(kb_id, effective_posts)
             except Exception as e:
                 logger.error(f"Lỗi build index KB '{kb_id}': {e}")
-        background_tasks.add_task(_run_kb_index)
+        asyncio.create_task(asyncio.to_thread(_run_kb_index))
 
     request.state.audit_logged = True
     await record_audit_log(
@@ -402,7 +414,7 @@ async def update_knowledge_base(
                 build_index_for_kb(target_id, effective_posts)
             except Exception as e:
                 logger.error(f"Lỗi re-index KB '{target_id}': {e}")
-        background_tasks.add_task(_run_kb_index)
+        asyncio.create_task(asyncio.to_thread(_run_kb_index))
 
     request.state.audit_logged = True
     await record_audit_log(
@@ -494,7 +506,7 @@ async def index_knowledge_base(
         except Exception as e:
             logger.error(f"RAG: Lỗi index KB '{target_id}': {e}")
 
-    background_tasks.add_task(_run_kb_index)
+    asyncio.create_task(asyncio.to_thread(_run_kb_index))
 
     request.state.audit_logged = True
     await record_audit_log(
@@ -567,28 +579,34 @@ async def get_kb_options(
 # ── Global Endpoints ───────────────────────────────────────────────────────
 
 @router.get("/status")
-async def rag_status():
-    """Kiểm tra trạng thái RAG module."""
+async def rag_status(db: AsyncSession = Depends(get_db)):
+    """Kiểm tra trạng thái RAG module và thống kê index toàn blog."""
     from app.core.config import settings
+    from sqlalchemy import func
     has_key = bool(settings.GEMINI_API_KEY)
 
     try:
-        from app.modules.rag.service import FAISS_INDEX_PATH, _faiss_index, load_index
-        index_exists = FAISS_INDEX_PATH.exists()
-        num_chunks = 0
+        from app.modules.rag.service import get_global_index_stats
+        stats = get_global_index_stats()
 
-        if index_exists:
-            if _faiss_index is None:
-                load_index()
-            from app.modules.rag.service import _faiss_index as idx
-            if idx is not None:
-                num_chunks = idx.ntotal
+        stmt_count = select(func.count(Post.id)).where(Post.is_published == True)
+        res_count = await db.execute(stmt_count)
+        total_published = res_count.scalar() or 0
+
+        indexed_count = stats.get("indexed_posts_count", 0)
+        pending_count = max(0, total_published - indexed_count)
+        index_exists = stats.get("is_indexed", False)
+        num_vectors = stats.get("num_vectors", 0)
 
         return {
-            "status": "ready" if (has_key and index_exists and num_chunks > 0) else ("no_key" if not has_key else "not_indexed"),
+            "status": "ready" if (has_key and index_exists and num_vectors > 0) else ("no_key" if not has_key else "not_indexed"),
             "gemini_api_configured": has_key,
             "index_exists": index_exists,
-            "num_vectors": num_chunks,
+            "num_vectors": num_vectors,
+            "total_posts_count": total_published,
+            "indexed_posts_count": indexed_count,
+            "pending_posts_count": pending_count,
+            "last_indexed_at": stats.get("last_indexed_at"),
             "embedding_model": "models/gemini-embedding-001",
             "llm_model": "gemini-2.5-flash",
             "description": "RAG Module — Gemini Embeddings + FAISS Vector Store"
@@ -600,6 +618,10 @@ async def rag_status():
             "gemini_api_configured": has_key,
             "index_exists": False,
             "num_vectors": 0,
+            "total_posts_count": 0,
+            "indexed_posts_count": 0,
+            "pending_posts_count": 0,
+            "last_indexed_at": None,
             "error": str(e),
             "description": f"RAG Module đang khởi tạo: {str(e)}"
         }
@@ -657,7 +679,7 @@ async def rebuild_index(
         except Exception as e:
             logger.error(f"RAG: Lỗi build index: {e}")
 
-    background_tasks.add_task(_run_index)
+    asyncio.create_task(asyncio.to_thread(_run_index))
 
     return IndexResponse(
         success=True,
@@ -727,17 +749,23 @@ async def query_rag(
         if target_kb:
             kb_status = get_kb_status(target_kb.id)
             if not kb_status.get("is_indexed"):
-                # Tự động build index cho KB nếu chưa có
                 post_ids = [p.id for p in target_kb.posts]
                 series_ids = [s.id for s in target_kb.series]
                 eff_posts = await get_effective_posts_for_kb(db, post_ids, series_ids)
                 if eff_posts:
-                    build_index_for_kb(target_kb.id, eff_posts)
+                    target_id = target_kb.id
+                    asyncio.create_task(asyncio.to_thread(build_index_for_kb, target_id, eff_posts))
+                return RAGResponse(
+                    answer=f"Kho tri thức '{target_kb.name}' ({len(eff_posts)} bài viết) hiện chưa hoàn tất chỉ mục vector. Hệ thống đã tự động kích hoạt lập chỉ mục trong nền, bạn vui lòng quay lại hỏi đáp sau 1-2 phút!",
+                    sources=[],
+                    kb_id=target_kb.id,
+                    kb_name=target_kb.name,
+                )
 
             similar_chunks = search_similar_kb(target_kb.id, req.query, top_k=req.top_k)
             answer = generate_answer(req.query, similar_chunks, kb_name=target_kb.name)
         else:
-            # Tự động khởi tạo index toàn bộ nếu chưa tồn tại
+            # Tự động khởi tạo index toàn bộ trong nền nếu chưa tồn tại
             if not FAISS_INDEX_PATH.exists():
                 stmt = select(Post).where(Post.is_published == True)
                 res = await db.execute(stmt)
@@ -754,7 +782,11 @@ async def query_rag(
                         }
                         for p in posts
                     ]
-                    build_index_from_posts(posts_data)
+                    asyncio.create_task(asyncio.to_thread(build_index_from_posts, posts_data))
+                return RAGResponse(
+                    answer="Chỉ mục vector toàn blog đang được khởi tạo trong nền. Vui lòng thử lại sau ít phút!",
+                    sources=[],
+                )
 
             similar_chunks = search_similar(req.query, top_k=req.top_k)
             answer = generate_answer(req.query, similar_chunks)

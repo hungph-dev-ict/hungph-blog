@@ -447,36 +447,91 @@ def load_kb_index(kb_id: str) -> bool:
         return False
 
 
+def get_global_index_stats() -> dict:
+    """Trả về thống kê index toàn blog (Global KB)."""
+    global _chunk_metadata, _faiss_index
+    from datetime import datetime, timezone
+
+    if not FAISS_INDEX_PATH.exists() or not FAISS_METADATA_PATH.exists():
+        return {
+            "is_indexed": False,
+            "num_vectors": 0,
+            "num_chunks": 0,
+            "indexed_posts_count": 0,
+            "last_indexed_at": None,
+        }
+
+    try:
+        if _faiss_index is None or not _chunk_metadata:
+            load_index()
+
+        indexed_ids = set()
+        for m in _chunk_metadata:
+            if isinstance(m, dict) and "post_id" in m and m["post_id"]:
+                indexed_ids.add(m["post_id"])
+
+        mtime = FAISS_INDEX_PATH.stat().st_mtime
+        last_indexed_at = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+
+        return {
+            "is_indexed": True,
+            "num_vectors": _faiss_index.ntotal if _faiss_index is not None else 0,
+            "num_chunks": len(_chunk_metadata),
+            "indexed_posts_count": len(indexed_ids),
+            "last_indexed_at": last_indexed_at,
+        }
+    except Exception as e:
+        logger.error(f"RAG: Lỗi tính stats global index: {e}")
+        return {
+            "is_indexed": False,
+            "num_vectors": 0,
+            "num_chunks": 0,
+            "indexed_posts_count": 0,
+            "last_indexed_at": None,
+        }
+
+
 def get_kb_status(kb_id: str) -> dict:
     """Kiểm tra trạng thái index của một Knowledge Base."""
     global _kb_indices
+    from datetime import datetime, timezone
 
     idx_path = get_kb_index_path(kb_id)
     meta_path = get_kb_metadata_path(kb_id)
 
     if not idx_path.exists() or not meta_path.exists():
-        return {"is_indexed": False, "num_vectors": 0, "num_chunks": 0}
+        return {
+            "is_indexed": False,
+            "num_vectors": 0,
+            "num_chunks": 0,
+            "indexed_posts_count": 0,
+            "last_indexed_at": None,
+        }
+
+    if kb_id not in _kb_indices:
+        load_kb_index(kb_id)
 
     if kb_id in _kb_indices:
         data = _kb_indices[kb_id]
+        metadata = data.get("metadata", [])
+        indexed_ids = set(m["post_id"] for m in metadata if isinstance(m, dict) and "post_id" in m and m["post_id"])
+        mtime = idx_path.stat().st_mtime
+        last_indexed_at = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
         return {
             "is_indexed": True,
-            "num_vectors": data["index"].ntotal,
-            "num_chunks": len(data["metadata"]),
+            "num_vectors": data["index"].ntotal if data.get("index") else 0,
+            "num_chunks": len(metadata),
+            "indexed_posts_count": len(indexed_ids),
+            "last_indexed_at": last_indexed_at,
         }
 
-    try:
-        if load_kb_index(kb_id):
-            data = _kb_indices[kb_id]
-            return {
-                "is_indexed": True,
-                "num_vectors": data["index"].ntotal,
-                "num_chunks": len(data["metadata"]),
-            }
-    except Exception:
-        pass
-
-    return {"is_indexed": False, "num_vectors": 0, "num_chunks": 0}
+    return {
+        "is_indexed": False,
+        "num_vectors": 0,
+        "num_chunks": 0,
+        "indexed_posts_count": 0,
+        "last_indexed_at": None,
+    }
 
 
 def build_index_for_kb(kb_id: str, posts_data: List[dict]) -> Tuple[int, int]:

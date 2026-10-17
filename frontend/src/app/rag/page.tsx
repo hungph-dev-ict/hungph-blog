@@ -20,6 +20,7 @@ import {
   GraduationCap,
   FileText,
   Settings,
+  AlertCircle,
 } from "lucide-react";
 import { queryRAG, getRAGStatus, triggerRAGIndex, fetchKnowledgeBases, KnowledgeBase } from "@/lib/api";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
@@ -265,11 +266,22 @@ function RAGContent() {
               <div className="font-semibold flex items-center gap-1.5">
                 <span>Đang hỏi đáp trong kho tri thức:</span>
                 <strong className="text-blue-700 dark:text-blue-300 font-bold">{selectedKb.name}</strong>
-                <span>({selectedKb.effective_posts_count} bài viết hiệu lực)</span>
+                <span className="opacity-80">({selectedKb.effective_posts_count} bài viết hiệu lực)</span>
+                {!selectedKb.is_indexed && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                    <AlertCircle className="w-3 h-3 text-amber-600" />
+                    <span>Chưa lập chỉ mục vector</span>
+                  </span>
+                )}
               </div>
               {selectedKb.description && (
                 <p className="text-[11px] text-blue-800/80 dark:text-blue-300/80 line-clamp-1">
                   {selectedKb.description}
+                </p>
+              )}
+              {!selectedKb.is_indexed && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-300 font-medium">
+                  Kho tri thức này chưa hoàn tất vector index. Quản trị viên vui lòng bấm &quot;Lập index&quot; trong trang quản lý Kho Tri Thức để kích hoạt tìm kiếm chính xác.
                 </p>
               )}
             </div>

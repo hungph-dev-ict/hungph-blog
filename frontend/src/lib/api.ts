@@ -481,15 +481,21 @@ export async function fetchMyProfile(token: string): Promise<User> {
 }
 
 // --- UTILITIES & RAG ---
-export async function getRAGStatus(): Promise<{
+export interface RAGStatusResponse {
   status: string;
   gemini_api_configured: boolean;
   index_exists: boolean;
   num_vectors: number;
+  total_posts_count?: number;
+  indexed_posts_count?: number;
+  pending_posts_count?: number;
+  last_indexed_at?: string | null;
   embedding_model: string;
   llm_model: string;
   description: string;
-}> {
+}
+
+export async function getRAGStatus(): Promise<RAGStatusResponse> {
   const res = await fetch(`${API_BASE_URL}/rag/status`, { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch RAG status");
   return res.json();
@@ -508,6 +514,10 @@ export interface KnowledgeBase {
   effective_posts_count: number;
   is_indexed: boolean;
   num_vectors: number;
+  indexed_posts_count?: number;
+  pending_posts_count?: number;
+  last_indexed_at?: string | null;
+  is_system?: boolean;
   series: Array<{ id: string; title: string; slug: string; lesson_count: number }>;
   posts: Array<{ id: string; title: string; slug: string }>;
 }
