@@ -323,21 +323,41 @@ export default function AdminRAGPage() {
   // Handle Index single KB
   const handleIndexKB = async (kb: KnowledgeBase) => {
     if (!token) return;
+    // Prevent double-click if already indexing
+    if (indexingKbId === kb.id || backgroundIndexingIds.includes(kb.id)) return;
     setIndexingKbId(kb.id);
     try {
       const res = await triggerKBIndex(kb.id, token);
       setNotification({
         type: "info",
         title: "Đang lập chỉ mục Vector",
-        message: res.message || `Đang lập chỉ mục cho kho tri thức "${kb.name}" trong nền.`,
+        message: res.message || `Đang lập chỉ mục cho kho tri thức "${kb.name}" trong nền. Trạng thái sẽ tự cập nhật.`,
       });
-      setTimeout(async () => {
-        await loadData();
-        setIndexingKbId(null);
-      }, 4000);
-      setTimeout(async () => {
-        await loadData();
-      }, 8000);
+      // Poll every few seconds to detect when indexing completes
+      const pollIntervals = [4000, 8000, 15000, 25000, 40000];
+      let cleared = false;
+      for (const delay of pollIntervals) {
+        setTimeout(async () => {
+          if (cleared) return;
+          const freshList = await fetchKnowledgeBases(token, true).catch(() => null);
+          if (freshList) {
+            setKbs(freshList);
+            const freshKb = freshList.find((k) => k.id === kb.id);
+            // Clear indexing state once the KB is confirmed indexed
+            if (freshKb?.is_indexed && freshKb?.last_indexed_at !== kb.last_indexed_at) {
+              cleared = true;
+              setIndexingKbId(null);
+            }
+          }
+        }, delay);
+      }
+      // Safety fallback: clear after 50s regardless
+      setTimeout(() => {
+        if (!cleared) {
+          setIndexingKbId(null);
+          loadData();
+        }
+      }, 50000);
     } catch (err: any) {
       setNotification({
         type: "error",
@@ -502,45 +522,54 @@ export default function AdminRAGPage() {
 
         {/* Overview Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Card 1: Total KBs (global + custom) */}
           <div className="p-4 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 space-y-1 shadow-xs">
             <div className="flex items-center justify-between text-stone-500 text-xs font-medium">
-              <span>Kho Tri Thức (KBs)</span>
+              <span>Tổng Kho Tri Thức</span>
               <Database className="w-4 h-4 text-blue-600" />
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
-              {kbs.length}
+              {allKbs.length}
             </div>
             <div className="text-[11px] text-stone-400">
-              {kbs.filter((k) => k.is_active).length} kho đang hoạt động
+              1 kho hệ thống &bull; {kbs.length} kho tuỳ chỉnh
             </div>
           </div>
 
+          {/* Card 2: Indexed KBs (all, including global) */}
           <div className="p-4 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 space-y-1 shadow-xs">
             <div className="flex items-center justify-between text-stone-500 text-xs font-medium">
-              <span>Đã Lập Chỉ Mục Vector</span>
+              <span>Kho Đã Có Vector Index</span>
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             </div>
             <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              {kbs.filter((k) => k.is_indexed).length} / {kbs.length}
+              {allKbs.filter((k) => k.is_indexed).length} / {allKbs.length}
             </div>
             <div className="text-[11px] text-stone-400">
-              Có vector index độc lập sẵn sàng
+              {allKbs.filter((k) => k.is_indexed).length === allKbs.length
+                ? "Tất cả kho đã sẵn sàng"
+                : `${allKbs.filter((k) => !k.is_indexed).length} kho chưa lập chỉ mục`}
             </div>
           </div>
 
+          {/* Card 3: Global vectors */}
           <div className="p-4 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 space-y-1 shadow-xs">
             <div className="flex items-center justify-between text-stone-500 text-xs font-medium">
-              <span>Vectors Toàn Blog (Global)</span>
+              <span>Vectors Kho Global</span>
               <Sparkles className="w-4 h-4 text-purple-600" />
             </div>
             <div className="text-2xl font-black text-purple-600 dark:text-purple-400">
               {ragStatus?.num_vectors || 0}
             </div>
             <div className="text-[11px] text-stone-400">
-              Trạng thái: {ragStatus?.status === "ready" ? "Sẵn sàng" : "Chưa hoàn tất"}
+              {(ragStatus?.indexed_posts_count ?? 0)} đã index
+              {(ragStatus?.pending_posts_count ?? 0) > 0
+                ? ` · ${ragStatus.pending_posts_count} chờ index`
+                : " · Đầy đủ"}
             </div>
           </div>
 
+          {/* Card 4: AI model */}
           <div className="p-4 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 space-y-1 shadow-xs">
             <div className="flex items-center justify-between text-stone-500 text-xs font-medium">
               <span>Mô Hình AI Đang Chạy</span>
