@@ -265,8 +265,24 @@ export async function fetchTags(): Promise<Tag[]> {
 }
 
 // --- SERIES & COURSES ---
-export async function fetchSeries(): Promise<Series[]> {
-  const res = await fetch(`${API_BASE_URL}/blog/series`, { next: { revalidate: 120 } });
+export async function fetchSeries(options?: {
+  includeDrafts?: boolean;
+  token?: string;
+}): Promise<Series[]> {
+  const params = new URLSearchParams();
+  if (options?.includeDrafts) {
+    params.set("include_drafts", "true");
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const headers: Record<string, string> = {};
+  if (options?.token) {
+    headers["Authorization"] = `Bearer ${options.token}`;
+  }
+  const res = await fetch(`${API_BASE_URL}/blog/series${query}`, {
+    headers,
+    cache: options?.includeDrafts ? "no-store" : undefined,
+    next: options?.includeDrafts ? undefined : { revalidate: 120 },
+  });
   if (!res.ok) return [];
   return res.json();
 }
@@ -280,9 +296,18 @@ export async function fetchLatestSeries(): Promise<Series | null> {
   )[0];
 }
 
-export async function fetchSeriesBySlug(slug: string): Promise<SeriesDetail> {
+export async function fetchSeriesBySlug(
+  slug: string,
+  options?: { token?: string; noCache?: boolean }
+): Promise<SeriesDetail> {
+  const headers: Record<string, string> = {};
+  if (options?.token) {
+    headers["Authorization"] = `Bearer ${options.token}`;
+  }
   const res = await fetch(`${API_BASE_URL}/blog/series/${slug}`, {
-    next: { revalidate: 60 },
+    headers,
+    cache: options?.noCache ? "no-store" : undefined,
+    next: options?.noCache ? undefined : { revalidate: 60 },
   });
   if (!res.ok) {
     throw new Error(`Series not found: ${slug}`);
@@ -470,23 +495,187 @@ export async function getRAGStatus(): Promise<{
   return res.json();
 }
 
+export interface KnowledgeBase {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  series_count: number;
+  direct_posts_count: number;
+  effective_posts_count: number;
+  is_indexed: boolean;
+  num_vectors: number;
+  series: Array<{ id: string; title: string; slug: string; lesson_count: number }>;
+  posts: Array<{ id: string; title: string; slug: string }>;
+}
+
+export interface KBOptionSeries {
+  id: string;
+  title: string;
+  slug: string;
+  lesson_count: number;
+  is_published: boolean;
+}
+
+export interface KBOptionPost {
+  id: string;
+  title: string;
+  slug: string;
+  is_published: boolean;
+  series_title?: string;
+}
+
+export interface KBOptionData {
+  series: KBOptionSeries[];
+  posts: KBOptionPost[];
+}
+
+export async function fetchKnowledgeBases(
+  token?: string,
+  includeInactive = false
+): Promise<KnowledgeBase[]> {
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const query = includeInactive ? "?include_inactive=true" : "";
+  const res = await fetch(`${API_BASE_URL}/rag/kb${query}`, {
+    headers,
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function fetchKnowledgeBase(
+  identifier: string,
+  token?: string
+): Promise<KnowledgeBase> {
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE_URL}/rag/kb/${identifier}`, {
+    headers,
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Kho tri thức không tồn tại");
+  return res.json();
+}
+
+export async function createKnowledgeBase(
+  data: {
+    name: string;
+    slug?: string;
+    description?: string;
+    post_ids?: string[];
+    series_ids?: string[];
+  },
+  token: string
+): Promise<KnowledgeBase> {
+  const res = await fetch(`${API_BASE_URL}/rag/kb`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể tạo kho tri thức");
+  }
+  return res.json();
+}
+
+export async function updateKnowledgeBase(
+  id: string,
+  data: {
+    name?: string;
+    slug?: string;
+    description?: string;
+    is_active?: boolean;
+    post_ids?: string[];
+    series_ids?: string[];
+  },
+  token: string
+): Promise<KnowledgeBase> {
+  const res = await fetch(`${API_BASE_URL}/rag/kb/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể cập nhật kho tri thức");
+  }
+  return res.json();
+}
+
+export async function deleteKnowledgeBase(
+  id: string,
+  token: string
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/rag/kb/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể xóa kho tri thức");
+  }
+}
+
+export async function triggerKBIndex(
+  id: string,
+  token: string
+): Promise<{ success: boolean; message: string; num_posts: number }> {
+  const res = await fetch(`${API_BASE_URL}/rag/kb/${id}/index`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Không thể lập chỉ mục cho kho tri thức");
+  }
+  return res.json();
+}
+
+export async function fetchKBOptionData(token: string): Promise<KBOptionData> {
+  const res = await fetch(`${API_BASE_URL}/rag/kb-options`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Không thể tải danh sách nội dung chọn");
+  return res.json();
+}
+
 export async function queryRAG(
   query: string,
   top_k = 5,
-  token?: string
+  token?: string,
+  kb_id?: string
 ): Promise<{
   answer: string;
   sources: Array<{ title: string; slug: string; similarity_score: number; snippet: string }>;
   model?: string;
+  kb_id?: string;
+  kb_name?: string;
 }> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
+  const body: any = { query, top_k };
+  if (kb_id) {
+    body.kb_id = kb_id;
+  }
   const res = await fetch(`${API_BASE_URL}/rag/query`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ query, top_k }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

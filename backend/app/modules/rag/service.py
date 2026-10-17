@@ -28,11 +28,14 @@ BASE_DIR = Path(__file__).parent
 FAISS_INDEX_PATH = BASE_DIR / "faiss.index"
 FAISS_METADATA_PATH = BASE_DIR / "faiss_metadata.pkl"
 EMBEDDING_CACHE_PATH = BASE_DIR / "embedding_cache.pkl"
+KB_INDICES_DIR = BASE_DIR / "indices"
+KB_INDICES_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Lazy-loaded FAISS index & Cache ────────────────────────────────────────
 _faiss_index = None
 _chunk_metadata: List[dict] = []
 _embedding_cache: dict = {}
+_kb_indices: dict = {}
 
 
 def _load_embedding_cache() -> dict:
@@ -306,11 +309,13 @@ def search_similar(query: str, top_k: int = 5) -> List[dict]:
 
 # ── Answer Generation ──────────────────────────────────────────────────────
 
-def generate_answer(query: str, context_chunks: List[dict]) -> str:
+def generate_answer(query: str, context_chunks: List[dict], kb_name: Optional[str] = None) -> str:
     """
-    Gọi Gemini Flash để trả lời câu hỏi dựa trên context từ blog.
+    Gọi Gemini Flash để trả lời câu hỏi dựa trên context từ blog hoặc kho tri thức cụ thể.
     """
     if not context_chunks:
+        if kb_name:
+            return f"Xin lỗi, tôi không tìm thấy thông tin liên quan trong kho tri thức '{kb_name}'. Hãy thử đặt câu hỏi khác hoặc chuyển sang kho tri thức khác!"
         return "Xin lỗi, tôi không tìm thấy thông tin liên quan trong blog. Hãy thử đặt câu hỏi khác!"
 
     import google.generativeai as genai_module
@@ -321,9 +326,11 @@ def generate_answer(query: str, context_chunks: List[dict]) -> str:
         for c in context_chunks
     ])
 
-    prompt = f"""Bạn là trợ lý AI của blog kỹ thuật HungPH.Blog — chuyên về kiến trúc phần mềm, backend hiệu năng cao và AI/ML.
+    kb_desc = f"kho tri thức '{kb_name}' của blog" if kb_name else "blog kỹ thuật HungPH.Blog"
 
-Dưới đây là các đoạn trích từ các bài viết trên blog liên quan đến câu hỏi của người dùng:
+    prompt = f"""Bạn là trợ lý AI chuyên biệt về {kb_desc} — chuyên về kiến trúc phần mềm, backend hiệu năng cao và AI/ML.
+
+Dưới đây là các đoạn trích từ các bài viết liên quan đến câu hỏi của người dùng:
 
 {context}
 
@@ -331,7 +338,7 @@ Dưới đây là các đoạn trích từ các bài viết trên blog liên qua
 
 Câu hỏi: {query}
 
-Hãy trả lời dựa vào nội dung blog ở trên. Trả lời bằng tiếng Việt, súc tích nhưng đầy đủ thông tin. Nếu câu hỏi không liên quan đến nội dung blog, hãy nói "Tôi chỉ có thể trả lời các câu hỏi liên quan đến nội dung trong blog này."
+Hãy trả lời dựa vào nội dung ở trên. Trả lời bằng tiếng Việt, súc tích nhưng đầy đủ thông tin. Nếu câu hỏi không liên quan đến nội dung đã cung cấp, hãy nói rõ rằng thông tin này không có trong kho tri thức này.
 
 Phong cách trả lời: chuyên nghiệp, kỹ thuật nhưng dễ hiểu."""
 
@@ -405,3 +412,193 @@ def update_post_in_index(post: dict):
     except Exception as e:
         logger.error(f"RAG: Lỗi khi auto-update index: {e}")
         # Non-critical — không crash main flow
+
+
+# ── Multi-Knowledge-Base Indices & Operations ─────────────────────────────
+
+def get_kb_index_path(kb_id: str) -> Path:
+    return KB_INDICES_DIR / f"faiss_{kb_id}.index"
+
+
+def get_kb_metadata_path(kb_id: str) -> Path:
+    return KB_INDICES_DIR / f"metadata_{kb_id}.pkl"
+
+
+def load_kb_index(kb_id: str) -> bool:
+    """Load FAISS index của một Knowledge Base từ disk vào memory."""
+    global _kb_indices
+    import faiss
+
+    idx_path = get_kb_index_path(kb_id)
+    meta_path = get_kb_metadata_path(kb_id)
+
+    if not idx_path.exists() or not meta_path.exists():
+        return False
+
+    try:
+        index = faiss.read_index(str(idx_path))
+        with open(meta_path, "rb") as f:
+            metadata = pickle.load(f)
+        _kb_indices[kb_id] = {"index": index, "metadata": metadata}
+        logger.info(f"RAG: Loaded KB '{kb_id}' index — {index.ntotal} vectors, {len(metadata)} chunks")
+        return True
+    except Exception as e:
+        logger.error(f"RAG: Lỗi load KB index '{kb_id}': {e}")
+        return False
+
+
+def get_kb_status(kb_id: str) -> dict:
+    """Kiểm tra trạng thái index của một Knowledge Base."""
+    global _kb_indices
+
+    idx_path = get_kb_index_path(kb_id)
+    meta_path = get_kb_metadata_path(kb_id)
+
+    if not idx_path.exists() or not meta_path.exists():
+        return {"is_indexed": False, "num_vectors": 0, "num_chunks": 0}
+
+    if kb_id in _kb_indices:
+        data = _kb_indices[kb_id]
+        return {
+            "is_indexed": True,
+            "num_vectors": data["index"].ntotal,
+            "num_chunks": len(data["metadata"]),
+        }
+
+    try:
+        if load_kb_index(kb_id):
+            data = _kb_indices[kb_id]
+            return {
+                "is_indexed": True,
+                "num_vectors": data["index"].ntotal,
+                "num_chunks": len(data["metadata"]),
+            }
+    except Exception:
+        pass
+
+    return {"is_indexed": False, "num_vectors": 0, "num_chunks": 0}
+
+
+def build_index_for_kb(kb_id: str, posts_data: List[dict]) -> Tuple[int, int]:
+    """
+    Tạo FAISS index riêng biệt cho một Kho tri thức (Knowledge Base).
+    posts_data: [{"id", "title", "slug", "summary", "content_html", "content_markdown"}]
+    """
+    global _kb_indices
+    import faiss
+
+    all_chunks = []
+    all_metadata = []
+
+    for post in posts_data:
+        raw_content = post.get("content_markdown") or strip_html(post.get("content_html", ""))
+        title = post.get("title", "")
+        summary = post.get("summary", "")
+        full_text = f"{title}. {summary}. {raw_content}".strip()
+
+        if not full_text or len(full_text) < 50:
+            continue
+
+        chunks = chunk_text(full_text, chunk_size=400, overlap=60)
+        for idx, chunk in enumerate(chunks):
+            all_chunks.append(chunk)
+            all_metadata.append({
+                "post_id": post["id"],
+                "title": post["title"],
+                "slug": post["slug"],
+                "summary": post.get("summary", ""),
+                "chunk_index": idx,
+                "snippet": chunk[:250],
+            })
+
+    if not all_chunks:
+        logger.warning(f"RAG: KB '{kb_id}' không có chunks nào để index.")
+        return 0, 0
+
+    logger.info(f"RAG: Đang embed {len(all_chunks)} chunks cho KB '{kb_id}' từ {len(posts_data)} bài viết...")
+    embeddings = embed_texts(all_chunks)
+
+    dim = embeddings.shape[1]
+    index = faiss.IndexFlatIP(dim)
+    faiss.normalize_L2(embeddings)
+    index.add(embeddings)
+
+    idx_path = get_kb_index_path(kb_id)
+    meta_path = get_kb_metadata_path(kb_id)
+
+    faiss.write_index(index, str(idx_path))
+    with open(meta_path, "wb") as f:
+        pickle.dump(all_metadata, f)
+
+    _kb_indices[kb_id] = {"index": index, "metadata": all_metadata}
+    logger.info(f"RAG: KB '{kb_id}' Index xong — {len(posts_data)} bài, {len(all_chunks)} chunks, dim={dim}")
+    return len(posts_data), len(all_chunks)
+
+
+def search_similar_kb(kb_id: str, query: str, top_k: int = 5) -> List[dict]:
+    """Tìm kiếm tương đồng trong index của một Knowledge Base cụ thể."""
+    global _kb_indices
+    import faiss
+
+    if kb_id not in _kb_indices:
+        if not load_kb_index(kb_id):
+            return []
+
+    kb_data = _kb_indices.get(kb_id)
+    if not kb_data:
+        return []
+
+    index = kb_data["index"]
+    metadata = kb_data["metadata"]
+
+    if index.ntotal == 0:
+        return []
+
+    q_vec = embed_query(query)
+    faiss.normalize_L2(q_vec)
+
+    search_k = min(top_k * 2, index.ntotal)
+    scores, indices = index.search(q_vec, search_k)
+
+    results = []
+    seen_posts = set()
+
+    for score, idx in zip(scores[0], indices[0]):
+        if idx < 0 or idx >= len(metadata):
+            continue
+        meta = metadata[idx]
+        post_slug = meta["slug"]
+        if post_slug in seen_posts:
+            continue
+        seen_posts.add(post_slug)
+        results.append({
+            **meta,
+            "similarity_score": float(score),
+        })
+        if len(results) >= top_k:
+            break
+
+    return results
+
+
+def delete_kb_index(kb_id: str):
+    """Xóa file index và metadata của Knowledge Base."""
+    global _kb_indices
+    if kb_id in _kb_indices:
+        del _kb_indices[kb_id]
+
+    idx_path = get_kb_index_path(kb_id)
+    meta_path = get_kb_metadata_path(kb_id)
+
+    if idx_path.exists():
+        try:
+            idx_path.unlink()
+        except Exception:
+            pass
+
+    if meta_path.exists():
+        try:
+            meta_path.unlink()
+        except Exception:
+            pass
+

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   Sparkles,
@@ -17,8 +17,11 @@ import {
   Terminal,
   Zap,
   Info,
+  GraduationCap,
+  FileText,
+  Settings,
 } from "lucide-react";
-import { queryRAG, getRAGStatus, triggerRAGIndex } from "@/lib/api";
+import { queryRAG, getRAGStatus, triggerRAGIndex, fetchKnowledgeBases, KnowledgeBase } from "@/lib/api";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { useAuth } from "@/lib/auth-context";
 
@@ -36,8 +39,11 @@ function RAGContent() {
   const { user, token } = useAuth();
   const searchParams = useSearchParams();
   const initialQ = searchParams?.get("q") || "";
+  const initialKbParam = searchParams?.get("kb") || "";
   const isAdmin = user?.role === "admin" || user?.is_admin;
 
+  const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
+  const [selectedKbId, setSelectedKbId] = useState<string | null>(null);
   const [query, setQuery] = useState(initialQ);
   const [loading, setLoading] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -47,10 +53,29 @@ function RAGContent() {
     answer: string;
     sources: Array<{ title: string; slug: string; similarity_score: number; snippet: string }>;
     model?: string;
+    kb_id?: string;
+    kb_name?: string;
   } | null>(null);
 
   useEffect(() => {
     fetchStatus();
+    loadKnowledgeBases();
+  }, []);
+
+  const loadKnowledgeBases = async () => {
+    try {
+      const data = await fetchKnowledgeBases();
+      setKbs(data);
+      if (initialKbParam) {
+        const match = data.find((k) => k.id === initialKbParam || k.slug === initialKbParam);
+        if (match) setSelectedKbId(match.id);
+      }
+    } catch (e) {
+      console.error("Lỗi tải danh sách kho tri thức:", e);
+    }
+  };
+
+  useEffect(() => {
     if (initialQ.trim()) {
       handleQuery(undefined, initialQ);
     }
@@ -65,6 +90,11 @@ function RAGContent() {
     }
   };
 
+  const selectedKb = useMemo(() => {
+    if (!selectedKbId) return null;
+    return kbs.find((k) => k.id === selectedKbId) || null;
+  }, [kbs, selectedKbId]);
+
   const handleQuery = async (e?: React.FormEvent, customQuery?: string) => {
     if (e) e.preventDefault();
     const q = customQuery || query;
@@ -75,7 +105,7 @@ function RAGContent() {
     setResult(null);
 
     try {
-      const data = await queryRAG(q, 5, token || undefined);
+      const data = await queryRAG(q, 5, token || undefined, selectedKbId || undefined);
       setResult(data);
     } catch (err: any) {
       alert(`Lỗi kết nối RAG: ${err.message}`);
@@ -112,7 +142,7 @@ function RAGContent() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
               <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>HungPH.Blog Semantic Intelligence • MVP Ready</span>
+              <span>HungPH.Blog Multi-KB Semantic Intelligence</span>
             </div>
 
             {/* Status indicator */}
@@ -120,7 +150,7 @@ function RAGContent() {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>
-                  {status.status === "ready" ? "Hệ thống RAG sẵn sàng" : "Chưa hoàn tất index"} • {status.num_vectors || 0} vectors
+                  {status.status === "ready" ? "Hệ thống RAG sẵn sàng" : "Chưa hoàn tất index"} • {kbs.length} Kho tri thức
                 </span>
               </div>
             )}
@@ -131,20 +161,29 @@ function RAGContent() {
           </h1>
 
           <p className="text-stone-600 dark:text-stone-300 text-sm sm:text-base max-w-3xl leading-relaxed">
-            Hệ thống RAG (Retrieval-Augmented Generation) tìm kiếm trực tiếp trong toàn bộ kho tri thức bài viết của blog bằng vector embedding đa chiều và tổng hợp câu trả lời chính xác, kèm trích dẫn nguồn minh bạch.
+            Hệ thống RAG (Retrieval-Augmented Generation) tìm kiếm trực tiếp trong các kho tri thức chuyên sâu hoặc toàn bộ blog bằng vector embedding đa chiều, tổng hợp câu trả lời chính xác và trích dẫn nguồn minh bạch.
           </p>
 
-          {/* Admin Reindex trigger */}
+          {/* Admin Reindex & Config trigger */}
           {isAdmin && (
-            <div className="pt-2 flex items-center gap-3">
+            <div className="pt-2 flex flex-wrap items-center gap-3">
               <button
                 onClick={handleReindex}
                 disabled={reindexing}
                 className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold transition-all disabled:opacity-50 shadow-xs"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${reindexing ? "animate-spin" : ""}`} />
-                <span>{reindexing ? "Đang đồng bộ..." : "Re-index kho bài viết (Admin)"}</span>
+                <span>{reindexing ? "Đang đồng bộ..." : "Re-index toàn blog (Admin)"}</span>
               </button>
+
+              <Link
+                href="/admin/rag"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-blue-300 dark:border-blue-700 bg-white/80 dark:bg-stone-800/80 text-blue-700 dark:text-blue-300 hover:bg-blue-50 text-xs font-semibold transition-all"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span>Quản lý Kho Tri Thức</span>
+              </Link>
+
               {reindexMsg && (
                 <span className="text-xs text-stone-500 dark:text-stone-400 italic">
                   {reindexMsg}
@@ -153,6 +192,101 @@ function RAGContent() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Knowledge Base Selector ── */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
+            <Database className="w-4 h-4 text-blue-600" />
+            <span>Chọn Phạm Vi Tra Cứu (Kho Tri Thức):</span>
+          </div>
+
+          {isAdmin && (
+            <Link
+              href="/admin/rag"
+              className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
+              <span>+ Tạo kho tri thức mới</span>
+            </Link>
+          )}
+        </div>
+
+        {/* Tab Pills for Knowledge Bases */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          {/* Default Option: All Posts */}
+          <button
+            type="button"
+            onClick={() => setSelectedKbId(null)}
+            className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 border ${
+              selectedKbId === null
+                ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20"
+                : "bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:border-blue-300"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Toàn Bộ Blog (Mặc định)</span>
+          </button>
+
+          {/* Dynamic Knowledge Bases */}
+          {kbs.map((kb) => {
+            const isSelected = selectedKbId === kb.id;
+            return (
+              <button
+                key={kb.id}
+                type="button"
+                onClick={() => setSelectedKbId(kb.id)}
+                className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 border ${
+                  isSelected
+                    ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20"
+                    : "bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:border-blue-300"
+                }`}
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>{kb.name}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
+                    isSelected
+                      ? "bg-blue-700 text-white"
+                      : "bg-stone-100 dark:bg-stone-800 text-stone-500"
+                  }`}
+                >
+                  {kb.effective_posts_count} bài
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Selected KB Sub-banner */}
+        {selectedKb ? (
+          <div className="p-3.5 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-900/60 flex items-center justify-between gap-3 text-xs text-blue-950 dark:text-blue-200">
+            <div className="space-y-0.5">
+              <div className="font-semibold flex items-center gap-1.5">
+                <span>Đang hỏi đáp trong kho tri thức:</span>
+                <strong className="text-blue-700 dark:text-blue-300 font-bold">{selectedKb.name}</strong>
+                <span>({selectedKb.effective_posts_count} bài viết hiệu lực)</span>
+              </div>
+              {selectedKb.description && (
+                <p className="text-[11px] text-blue-800/80 dark:text-blue-300/80 line-clamp-1">
+                  {selectedKb.description}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSelectedKbId(null)}
+              className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+            >
+              Đặt lại toàn blog
+            </button>
+          </div>
+        ) : (
+          <p className="text-[11px] text-stone-400 pl-1">
+            Đang tìm kiếm trên toàn bộ các bài viết đã xuất bản của blog.
+          </p>
+        )}
       </div>
 
       {/* Interactive Playground */}
@@ -165,10 +299,14 @@ function RAGContent() {
             <h2 className="text-lg font-bold text-stone-900 dark:text-white flex items-center gap-2">
               <span>Hỏi đáp cùng Trợ Lý AI</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold uppercase">
-                Gemini 2.5 Flash
+                {selectedKb ? selectedKb.name : "Toàn Bộ Blog"}
               </span>
             </h2>
-            <p className="text-xs text-stone-500">Tra cứu ngữ nghĩa thực tế từ toàn bộ nội dung các bài viết trên blog</p>
+            <p className="text-xs text-stone-500">
+              {selectedKb
+                ? `Tra cứu ngữ nghĩa chuyên biệt trong phạm vi ${selectedKb.name}`
+                : "Tra cứu ngữ nghĩa thực tế từ toàn bộ nội dung các bài viết trên blog"}
+            </p>
           </div>
         </div>
 
@@ -179,7 +317,11 @@ function RAGContent() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Đặt câu hỏi về kiến trúc phần mềm, RAG, pgvector, FastAPI..."
+              placeholder={
+                selectedKb
+                  ? `Đặt câu hỏi liên quan đến kho tri thức "${selectedKb.name}"...`
+                  : "Đặt câu hỏi về kiến trúc phần mềm, RAG, pgvector, FastAPI..."
+              }
               className="w-full pl-4 pr-28 py-3.5 rounded-2xl border border-stone-200 dark:border-stone-700 bg-stone-50/50 dark:bg-stone-800/60 text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-inner"
             />
             <button
@@ -228,7 +370,9 @@ function RAGContent() {
             <div className="flex items-center justify-between border-b border-blue-200/60 dark:border-blue-900/40 pb-3">
               <div className="flex items-center gap-2 text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                <span>Câu trả lời từ RAG</span>
+                <span>
+                  Câu trả lời từ RAG {result.kb_name ? `• ${result.kb_name}` : "• Toàn Bộ Blog"}
+                </span>
               </div>
               <span className="text-[11px] text-stone-400 font-mono">
                 {result.model || "Gemini 2.5 Flash + FAISS"}
@@ -245,7 +389,10 @@ function RAGContent() {
               <div className="pt-4 border-t border-stone-200 dark:border-stone-800/80 space-y-3">
                 <div className="flex items-center gap-2 text-xs font-semibold text-stone-700 dark:text-stone-300">
                   <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  <span>Bài viết nguồn được trích dẫn ({result.sources.length} tài liệu):</span>
+                  <span>
+                    Bài viết nguồn được trích dẫn ({result.sources.length} tài liệu
+                    {result.kb_name ? ` trong ${result.kb_name}` : ""}):
+                  </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {result.sources.map((s, idx) => (
@@ -282,7 +429,7 @@ function RAGContent() {
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
           <Layers className="w-5 h-5 text-blue-600" />
-          <span>Kiến Trúc RAG Hoạt Động Như Thế Nào?</span>
+          <span>Kiến Trúc RAG Đa Kho Tri Thức Hoạt Động Như Thế Nào?</span>
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -290,9 +437,9 @@ function RAGContent() {
             <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600">
               <Database className="w-4 h-4" />
             </div>
-            <h3 className="font-bold text-sm text-stone-900 dark:text-white">1. Chunking & Embedding</h3>
+            <h3 className="font-bold text-sm text-stone-900 dark:text-white">1. Kho Tri Thức Phân Lớp (KB)</h3>
             <p className="text-xs text-stone-500 leading-relaxed">
-              Mỗi bài viết được làm sạch, chia thành các đoạn 400 từ và chuyển hóa thành vector 3072 chiều bằng Google Gemini Embedding.
+              Admin tạo các kho tri thức riêng biệt theo chuyên đề, gộp các khóa học hoặc bài viết lẻ. Mỗi kho sở hữu một Vector Space độc lập.
             </p>
           </div>
 
@@ -300,9 +447,9 @@ function RAGContent() {
             <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center text-purple-600">
               <Cpu className="w-4 h-4" />
             </div>
-            <h3 className="font-bold text-sm text-stone-900 dark:text-white">2. FAISS Vector Search</h3>
+            <h3 className="font-bold text-sm text-stone-900 dark:text-white">2. FAISS Isolated Index</h3>
             <p className="text-xs text-stone-500 leading-relaxed">
-              Thư viện FAISS (Facebook AI Similarity Search) lập chỉ mục L2/Cosine, tìm kiếm tức thì các đoạn văn bản tương đồng ngữ nghĩa nhất.
+              Mỗi kho tri thức có file index FAISS Flat L2/Cosine riêng, đảm bảo kết quả tìm kiếm ngữ nghĩa chính xác 100% trong miền tri thức đã chọn.
             </p>
           </div>
 
@@ -310,9 +457,9 @@ function RAGContent() {
             <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600">
               <Search className="w-4 h-4" />
             </div>
-            <h3 className="font-bold text-sm text-stone-900 dark:text-white">3. Gemini Flash Generation</h3>
+            <h3 className="font-bold text-sm text-stone-900 dark:text-white">3. Gemini Flash Synthesis</h3>
             <p className="text-xs text-stone-500 leading-relaxed">
-              Mô hình Gemini 2.5 Flash tiếp nhận ngữ cảnh thực tế được truy xuất và tổng hợp câu trả lời tiếng Việt chính xác, không hallucination.
+              Mô hình Gemini 2.5 Flash tiếp nhận ngữ cảnh chuyên sâu từ kho tri thức và tổng hợp câu trả lời tiếng Việt chính xác, không hallucination.
             </p>
           </div>
         </div>

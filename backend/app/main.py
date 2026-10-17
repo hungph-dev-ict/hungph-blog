@@ -16,6 +16,7 @@ from app.modules.blog.models import Category, Chapter, Post, Series, Tag, Glossa
 from app.modules.blog.router import router as blog_router
 from app.modules.blog.glossary_router import router as glossary_router
 from app.modules.media.router import router as media_router
+from app.modules.rag.models import KnowledgeBase, kb_posts, kb_series  # registers RAG tables
 from app.modules.rag.router import router as rag_router
 from app.modules.utilities.router import router as utilities_router
 from app.modules.social.models import Follow, Notification  # registers tables

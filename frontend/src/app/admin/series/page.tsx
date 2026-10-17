@@ -97,7 +97,11 @@ function AdminSeriesContent() {
     setSelectedSeriesSlug(cleanSlug);
     setDetailLoading(true);
     try {
-      const detail = await fetchSeriesBySlug(cleanSlug);
+      const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("hungph_blog_token") : null);
+      const detail = await fetchSeriesBySlug(cleanSlug, {
+        token: activeToken || undefined,
+        noCache: true,
+      });
       setSelectedDetail(detail);
       if (typeof window !== "undefined") {
         const currentUrl = new URL(window.location.href);
@@ -112,7 +116,7 @@ function AdminSeriesContent() {
     } finally {
       setDetailLoading(false);
     }
-  }, []);
+  }, [token]);
 
   // Edit Chapter state
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
@@ -174,10 +178,11 @@ function AdminSeriesContent() {
   const loadData = async (targetSlug?: string | null) => {
     setLoading(true);
     try {
+      const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("hungph_blog_token") : null);
       const promises: [Promise<Series[]>, Promise<Category[]>, Promise<User[]>] = [
-        fetchSeries(),
+        fetchSeries({ includeDrafts: true, token: activeToken || undefined }),
         fetchCategories(),
-        token ? fetchUsers(token).catch(() => []) : Promise.resolve([]),
+        activeToken ? fetchUsers(activeToken).catch(() => []) : Promise.resolve([]),
       ];
       const [sData, cData, uData] = await Promise.all(promises);
       setSeriesList(sData);
@@ -186,8 +191,8 @@ function AdminSeriesContent() {
         setUsers(uData);
       }
 
-      if (token) {
-        loadPendingCounts(sData, token);
+      if (activeToken) {
+        loadPendingCounts(sData, activeToken);
       }
 
       // Xác định khóa học cần chọn từ query parameters ngay khi load xong dữ liệu
@@ -223,7 +228,7 @@ function AdminSeriesContent() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     if (token && users.length === 0) {
@@ -888,7 +893,7 @@ function AdminSeriesContent() {
                           </div>
                         )}
                         {s.summary && (
-                          <p className="text-xs text-stone-500 line-clamp-2">
+                          <p className="text-xs text-stone-500 line-clamp-2 whitespace-pre-line">
                             {s.summary}
                           </p>
                         )}
@@ -974,7 +979,12 @@ function AdminSeriesContent() {
                       </strong>
                     </p>
                   )}
-                  <p className="text-xs text-stone-500 mt-0.5">
+                  {selectedDetail.summary && (
+                    <p className="text-xs text-stone-600 dark:text-stone-300 mt-2 leading-relaxed whitespace-pre-line">
+                      {selectedDetail.summary}
+                    </p>
+                  )}
+                  <p className="text-xs text-stone-500 mt-1">
                     Thêm chương mới hoặc chỉnh sửa tên chương để thiết lập dàn bài học.
                   </p>
                 </div>
@@ -992,7 +1002,7 @@ function AdminSeriesContent() {
                   <div className="font-bold flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400">
                     <span>Bản quyền &amp; Nguồn gốc tài liệu</span>
                   </div>
-                  <p className="text-[11px] leading-relaxed opacity-90">{selectedDetail.attribution_text}</p>
+                  <p className="text-[11px] leading-relaxed opacity-90 whitespace-pre-line">{selectedDetail.attribution_text}</p>
                 </div>
               )}
 
@@ -1241,7 +1251,7 @@ function AdminSeriesContent() {
                               )}
 
                               {ch.description && (
-                                <p className="text-[11px] text-stone-500 pl-1">{ch.description}</p>
+                                <p className="text-[11px] text-stone-500 pl-1 whitespace-pre-line">{ch.description}</p>
                               )}
 
                               {/* Lessons list inside chapter */}

@@ -1013,7 +1013,8 @@ async def list_tags(db: AsyncSession = Depends(get_db)):
 @router.get("/series", response_model=List[SeriesResponse])
 async def list_series(
     include_drafts: bool = False,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    optional_user: Optional[User] = Depends(get_optional_user)
 ):
     stmt = (
         select(Series)
@@ -1024,7 +1025,14 @@ async def list_series(
             selectinload(Series.posts)
         )
     )
-    if not include_drafts:
+    is_admin = bool(optional_user and (optional_user.is_admin or getattr(optional_user, "role", "") == "admin"))
+    if include_drafts:
+        if not is_admin:
+            if optional_user:
+                stmt = stmt.where(or_(Series.is_published == True, Series.owner_id == optional_user.id))
+            else:
+                stmt = stmt.where(Series.is_published == True)
+    else:
         stmt = stmt.where(Series.is_published == True)
     
     stmt = stmt.order_by(desc(Series.created_at))
@@ -1144,7 +1152,11 @@ async def list_writeable_series(
 
 
 @router.get("/series/{slug}", response_model=SeriesDetailResponse)
-async def get_series_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
+async def get_series_by_slug(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    optional_user: Optional[User] = Depends(get_optional_user)
+):
     stmt = (
         select(Series)
         .where(Series.slug == slug)
@@ -1159,6 +1171,23 @@ async def get_series_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
     s = res.scalar_one_or_none()
     if not s:
         raise HTTPException(status_code=404, detail="Khóa học không tồn tại")
+
+    if not s.is_published:
+        is_admin = bool(optional_user and (optional_user.is_admin or getattr(optional_user, "role", "") == "admin"))
+        is_owner = bool(optional_user and s.owner_id == optional_user.id)
+        if not is_admin and not is_owner:
+            is_collab = False
+            if optional_user:
+                collab_stmt = select(SeriesCollaborator).where(
+                    SeriesCollaborator.series_id == s.id,
+                    SeriesCollaborator.user_id == optional_user.id,
+                    SeriesCollaborator.status == "accepted"
+                )
+                collab_res = await db.execute(collab_stmt)
+                if collab_res.scalar_one_or_none():
+                    is_collab = True
+            if not is_collab:
+                raise HTTPException(status_code=404, detail="Khóa học chưa được công khai")
 
     chapters_data = []
     total_lessons = 0

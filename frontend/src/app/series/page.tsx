@@ -101,7 +101,7 @@ export default function SeriesListPage() {
                     <Link href={`/series/${series.slug}`}>{series.title}</Link>
                   </h2>
                   {series.summary && (
-                    <p className="text-sm text-stone-600 dark:text-stone-400 line-clamp-3 leading-relaxed">
+                    <p className="text-sm text-stone-600 dark:text-stone-400 line-clamp-3 leading-relaxed whitespace-pre-line">
                       {series.summary}
                     </p>
                   )}

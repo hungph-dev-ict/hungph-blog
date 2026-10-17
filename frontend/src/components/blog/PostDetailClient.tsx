@@ -937,7 +937,7 @@ export const PostDetailClient: React.FC<PostDetailClientProps> = ({ initialPost:
                       <div className="font-bold text-amber-950 dark:text-amber-200 text-[11px] uppercase tracking-wider">
                         Bản quyền &amp; Nguồn tài liệu gốc
                       </div>
-                      <p className="text-amber-900/85 dark:text-amber-300/85 leading-relaxed text-xs">
+                      <p className="text-amber-900/85 dark:text-amber-300/85 leading-relaxed text-xs whitespace-pre-line">
                         {post.series_outline?.attribution_text}
                       </p>
                     </div>

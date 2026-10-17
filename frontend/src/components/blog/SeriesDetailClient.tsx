@@ -388,7 +388,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
             </h1>
 
             {series.summary && (
-              <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 leading-relaxed">
+              <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 leading-relaxed whitespace-pre-line">
                 {series.summary}
               </p>
             )}
@@ -568,7 +568,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
               <div className="font-bold text-amber-950 dark:text-amber-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
                 <span>Bản quyền &amp; Nguồn gốc tài liệu tham khảo</span>
               </div>
-              <p className="text-amber-900/85 dark:text-amber-300/85 leading-relaxed text-xs">
+              <p className="text-amber-900/85 dark:text-amber-300/85 leading-relaxed text-xs whitespace-pre-line">
                 {attribution}
               </p>
             </div>
@@ -680,7 +680,7 @@ export const SeriesDetailClient: React.FC<SeriesDetailClientProps> = ({ initialS
                           {chapter.title}
                         </h2>
                         {chapter.description && (
-                          <p className="text-xs text-stone-500 dark:text-stone-400">
+                          <p className="text-xs text-stone-500 dark:text-stone-400 whitespace-pre-line">
                             {chapter.description}
                           </p>
                         )}
